@@ -7,10 +7,11 @@ import { analyzeImageRegion } from '../../seo-assistant/services/geminiService';
 interface ImageMaskerProps {
     onImageChange: (imageBase64: string | null) => void;
     onMaskChange: (maskBase64: string | null) => void;
-    onAnalyzeRegion?: (prompt: string) => void;
+    onAnalyzeRegion?: (prompt: string, position?: string, size?: string) => void;
+    onPositionChange?: (position: string, size: string) => void;
 }
 
-const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, onAnalyzeRegion }) => {
+const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, onAnalyzeRegion, onPositionChange }) => {
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [brushSize, setBrushSize] = useState(30);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,6 +19,11 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
     const [isDrawing, setIsDrawing] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    
+    // State to track mask bounds for position/size calculation
+    const [maskBounds, setMaskBounds] = useState<{minX: number, minY: number, maxX: number, maxY: number} | null>(null);
+    const [lastPosition, setLastPosition] = useState<string>("");
+    const [lastSize, setLastSize] = useState<string>("");
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -41,9 +47,13 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
             if (ctx) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 onMaskChange(null);
+                setMaskBounds(null);
+                setLastPosition("");
+                setLastSize("");
+                if (onPositionChange) onPositionChange("", "");
             }
         }
-    }, [onMaskChange]);
+    }, [onMaskChange, onPositionChange]);
 
     const getMousePos = (e: React.MouseEvent | React.TouchEvent) => {
         const canvas = canvasRef.current;
@@ -88,29 +98,78 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
         if (!ctx) return;
 
         const { x, y } = getMousePos(e);
+        const rect = canvasRef.current.getBoundingClientRect();
+        const scaleX = canvasRef.current.width / rect.width;
+        
+        // Scale brush size to match internal resolution
+        const scaledBrushSize = brushSize * scaleX;
 
         ctx.globalCompositeOperation = 'source-over';
         ctx.beginPath();
-        ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+        ctx.arc(x, y, scaledBrushSize / 2, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(255, 255, 255, 1)'; // White mask
         ctx.fill();
+
+        // Update bounds locally for this drawing session
+        const radius = scaledBrushSize / 2;
+        setMaskBounds(prev => {
+            if (!prev) return { minX: x - radius, minY: y - radius, maxX: x + radius, maxY: y + radius };
+            return {
+                minX: Math.min(prev.minX, x - radius),
+                minY: Math.min(prev.minY, y - radius),
+                maxX: Math.max(prev.maxX, x + radius),
+                maxY: Math.max(prev.maxY, y + radius)
+            };
+        });
+    };
+
+    const calculatePositionAndSize = (bounds: {minX: number, minY: number, maxX: number, maxY: number}, canvasWidth: number, canvasHeight: number) => {
+        const width = bounds.maxX - bounds.minX;
+        const height = bounds.maxY - bounds.minY;
+        const centerX = bounds.minX + width / 2;
+        const centerY = bounds.minY + height / 2;
+
+        // 5x5 Grid Logic for precise positioning
+        const xPct = centerX / canvasWidth;
+        const yPct = centerY / canvasHeight;
+
+        let hPos = "";
+        if (xPct < 0.2) hPos = "far left";
+        else if (xPct < 0.4) hPos = "left";
+        else if (xPct < 0.6) hPos = "center";
+        else if (xPct < 0.8) hPos = "right";
+        else hPos = "far right";
+
+        let vPos = "";
+        if (yPct < 0.2) vPos = "top";
+        else if (yPct < 0.4) vPos = "upper-middle";
+        else if (yPct < 0.6) vPos = "middle";
+        else if (yPct < 0.8) vPos = "lower-middle";
+        else vPos = "bottom";
+
+        // Clean up "middle center" to just "center" or "middle center"
+        const position = (vPos === "middle" && hPos === "center") ? "center" : `${vPos} ${hPos}`;
+
+        // More granular size logic (5 levels)
+        const areaRatio = (width * height) / (canvasWidth * canvasHeight);
+        let size = "medium-sized";
+        if (areaRatio < 0.02) size = "tiny-sized";
+        else if (areaRatio < 0.1) size = "small-sized";
+        else if (areaRatio < 0.3) size = "medium-sized";
+        else if (areaRatio < 0.6) size = "large-sized";
+        else size = "extra-large-sized";
+
+        return { position, size };
     };
 
     const saveMask = () => {
         const canvas = canvasRef.current;
-        if (canvas) {
-            // Check if canvas is empty
-            const ctx = canvas.getContext('2d');
-            // If we really need to check if it's empty we can look at pixel data, 
-            // but for now just returning the dataURL is fine. 
-            // If the user hasn't drawn, it's a transparent image.
-            // However, Runware might expect a black background with white mask?
-            // Usually masking APIs expect white for the area to modify, black for the rest.
-            
-            // Create a temp canvas to composite against black if needed, 
-            // but often PNG with transparency is accepted.
-            // Let's assume standard mask: white = edit, black = keep.
-            
+        if (canvas && maskBounds) {
+            const { position, size } = calculatePositionAndSize(maskBounds, canvas.width, canvas.height);
+            setLastPosition(position);
+            setLastSize(size);
+            if (onPositionChange) onPositionChange(position, size);
+
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
@@ -141,11 +200,31 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
 
     const onImageLoad = () => {
         if (imageRef.current && canvasRef.current) {
-            canvasRef.current.width = imageRef.current.width;
-            canvasRef.current.height = imageRef.current.height;
+            // Set canvas internal resolution to match the ORIGINAL image size
+            // This ensures the mask has the same quality and dimensions as the uploaded image
+            canvasRef.current.width = imageRef.current.naturalWidth;
+            canvasRef.current.height = imageRef.current.naturalHeight;
+            
+            // Set canvas CSS display size to match the DISPLAYED image size
+            canvasRef.current.style.width = `${imageRef.current.clientWidth}px`;
+            canvasRef.current.style.height = `${imageRef.current.clientHeight}px`;
+            
             clearMask();
         }
     };
+
+    // Handle window resize to keep canvas display size in sync
+    useEffect(() => {
+        const handleResize = () => {
+            if (imageRef.current && canvasRef.current) {
+                canvasRef.current.style.width = `${imageRef.current.clientWidth}px`;
+                canvasRef.current.style.height = `${imageRef.current.clientHeight}px`;
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const handleAnalyze = async () => {
         if (!imageSrc || !canvasRef.current || !onAnalyzeRegion) return;
@@ -183,7 +262,13 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
                     </Label>
                     <div 
                         className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-teal-500 transition-colors cursor-pointer"
-                        onClick={() => document.getElementById('image-upload')?.click()}
+                        onClick={(e) => {
+                            // Tránh kích hoạt 2 lần nếu click vào label hoặc chính input
+                            if (e.target instanceof HTMLElement && (e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT' || e.target.closest('label'))) {
+                                return;
+                            }
+                            document.getElementById('image-upload')?.click();
+                        }}
                     >
                         <div className="space-y-1 text-center">
                             <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
@@ -254,6 +339,13 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
                             </Button>
                         </div>
                     </div>
+                    {lastPosition && (
+                        <div className="flex gap-2 text-xs text-teal-700 bg-teal-50 p-2 rounded border border-teal-100 mb-2">
+                            <span className="font-semibold">Vị trí: {lastPosition}</span>
+                            <span>|</span>
+                            <span className="font-semibold">Kích thước: {lastSize}</span>
+                        </div>
+                    )}
 
                     <div 
                         ref={containerRef}

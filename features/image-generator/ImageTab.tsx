@@ -16,6 +16,8 @@ const ImageTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [seedImage, setSeedImage] = useState<string | null>(null);
   const [maskImage, setMaskImage] = useState<string | null>(null);
+  const [maskPosition, setMaskPosition] = useState<string | null>(null);
+  const [maskSize, setMaskSize] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState(import.meta.env.VITE_RUNWARE_MODEL || 'runware:100@1');
   const [numberResults, setNumberResults] = useState(1);
   const [copyingIndex, setCopyingIndex] = useState<number | null>(null);
@@ -73,9 +75,102 @@ const ImageTab: React.FC = () => {
       
       // If Gemini is selected as the "brain", we use it to refine the prompt first
       if (selectedModel.startsWith('google:')) {
-          const refined = await refinePrompt(prompt);
+          const refined = await refinePrompt(prompt, style, maskPosition || undefined, maskSize || undefined);
           finalPrompt = refined;
           setPrompt(refined); // Show refined prompt to user
+      }
+
+      // Add position and size info to prompt if using mask
+      if (maskImage && maskPosition) {
+          const posMap: Record<string, string> = {
+              'top far left': 'ở góc trên cùng bên trái',
+              'top left': 'ở phía trên bên trái',
+              'top center': 'ở phía trên chính giữa',
+              'top right': 'ở phía trên bên phải',
+              'top far right': 'ở góc trên cùng bên phải',
+              
+              'upper-middle far left': 'ở giữa phía trên bên trái',
+              'upper-middle left': 'ở vùng trên bên trái',
+              'upper-middle center': 'ở giữa phía trên',
+              'upper-middle right': 'ở vùng trên bên phải',
+              'upper-middle far right': 'ở giữa phía trên bên phải',
+
+              'middle far left': 'ở chính giữa bên trái',
+              'middle left': 'ở vùng bên trái',
+              'center': 'ở chính giữa trung tâm',
+              'middle right': 'ở vùng bên phải',
+              'middle far right': 'ở chính giữa bên phải',
+
+              'lower-middle far left': 'ở giữa phía dưới bên trái',
+              'lower-middle left': 'ở vùng dưới bên trái',
+              'lower-middle center': 'ở giữa phía dưới',
+              'lower-middle right': 'ở vùng dưới bên phải',
+              'lower-middle far right': 'ở giữa phía dưới bên phải',
+
+              'bottom far left': 'ở góc dưới cùng bên trái',
+              'bottom left': 'ở phía dưới bên trái',
+              'bottom center': 'ở phía dưới chính giữa',
+              'bottom right': 'ở phía dưới bên phải',
+              'bottom far right': 'ở góc dưới cùng bên phải'
+          };
+          const sizeMap: Record<string, string> = {
+              'tiny-sized': 'kích thước rất nhỏ',
+              'small-sized': 'kích thước nhỏ',
+              'medium-sized': 'kích thước vừa',
+              'large-sized': 'kích thước lớn',
+              'extra-large-sized': 'kích thước rất lớn'
+          };
+          
+          const posText = posMap[maskPosition] || `tại vị trí ${maskPosition}`;
+          const sizeText = sizeMap[maskSize || ''] || '';
+          
+          // English mapping for prompt injection (5x5 grid)
+          const posMapEn: Record<string, string> = {
+              'top far left': 'in the far top-left corner',
+              'top left': 'in the top-left area',
+              'top center': 'in the top-center area',
+              'top right': 'in the top-right area',
+              'top far right': 'in the far top-right corner',
+
+              'upper-middle far left': 'in the upper-middle far-left area',
+              'upper-middle left': 'in the upper-left area',
+              'upper-middle center': 'in the upper-center area',
+              'upper-middle right': 'in the upper-right area',
+              'upper-middle far right': 'in the upper-middle far-right area',
+
+              'middle far left': 'in the middle far-left area',
+              'middle left': 'in the middle-left area',
+              'center': 'in the exact center',
+              'middle right': 'in the middle-right area',
+              'middle far right': 'in the middle far-right area',
+
+              'lower-middle far left': 'in the lower-middle far-left area',
+              'lower-middle left': 'in the lower-left area',
+              'lower-middle center': 'in the lower-center area',
+              'lower-middle right': 'in the lower-right area',
+              'lower-middle far right': 'in the lower-middle far-right area',
+
+              'bottom far left': 'in the far bottom-left corner',
+              'bottom left': 'in the bottom-left area',
+              'bottom center': 'in the bottom-center area',
+              'bottom right': 'in the bottom-right area',
+              'bottom far right': 'in the far bottom-right corner'
+          };
+          const sizeMapEn: Record<string, string> = {
+              'tiny-sized': 'tiny size',
+              'small-sized': 'small size',
+              'medium-sized': 'medium size',
+              'large-sized': 'large size',
+              'extra-large-sized': 'extra large size'
+          };
+
+          const posTextEn = posMapEn[maskPosition] || `at ${maskPosition}`;
+          const sizeTextEn = sizeMapEn[maskSize || ''] || '';
+
+          // Only append if not already in prompt (simple check)
+          if (!finalPrompt.includes(posTextEn)) {
+              finalPrompt = `${finalPrompt}, ${posTextEn}, ${sizeTextEn}, realistic, matching lighting and style.`;
+          }
       }
 
       const results = await generateImage(
@@ -195,7 +290,15 @@ const ImageTab: React.FC = () => {
              <ImageMasker 
                 onImageChange={setSeedImage} 
                 onMaskChange={setMaskImage} 
-                onAnalyzeRegion={(analyzedPrompt) => setPrompt(analyzedPrompt)}
+                onAnalyzeRegion={(analyzedPrompt, pos, size) => {
+                    setPrompt(analyzedPrompt);
+                    if (pos) setMaskPosition(pos);
+                    if (size) setMaskSize(size);
+                }}
+                onPositionChange={(pos, size) => {
+                    setMaskPosition(pos);
+                    setMaskSize(size);
+                }}
              />
           </div>
 

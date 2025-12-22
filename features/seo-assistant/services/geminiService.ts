@@ -292,7 +292,7 @@ const buildOptimizationPrompt = (userInput: UserInput, marketAnalysisContext: st
   `;
 }
 
-export const refinePrompt = async (prompt: string): Promise<string> => {
+export const refinePrompt = async (prompt: string, style?: string, position?: string, size?: string): Promise<string> => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : "") || "";
     if (!apiKey) return prompt;
     
@@ -300,15 +300,21 @@ export const refinePrompt = async (prompt: string): Promise<string> => {
     const model = "gemini-2.0-flash";
     
     try {
-        const response = await ai.models.generateContent({
-            model,
-            contents: [{ role: 'user', parts: [{ text: `You are an expert at writing prompts for high-quality product photography using AI models like FLUX or Midjourney. 
+        let instruction = `You are an expert at writing prompts for high-quality product photography using AI models like FLUX or Midjourney. 
                     Enhance the following basic prompt into a professional, detailed, and visually descriptive prompt. 
                     Focus on lighting, texture, camera angle, and professional studio settings.
                     Keep the core subject the same.
-                    Output ONLY the enhanced prompt in English.
-                    
-                    Basic Prompt: ${prompt}` }] }]
+                    IMPORTANT: Ensure the prompt describes a visual scene and does NOT result in any text, labels, or watermarks appearing on the image.
+                    Output ONLY the enhanced prompt in English.`;
+
+        let fullInput = `Basic Prompt: ${prompt}`;
+        if (style && style !== 'None') fullInput += `\nStyle: ${style}`;
+        if (position) fullInput += `\nPosition in image: ${position}`;
+        if (size) fullInput += `\nSize: ${size}`;
+
+        const response = await ai.models.generateContent({
+            model,
+            contents: [{ role: 'user', parts: [{ text: `${instruction}\n\n${fullInput}` }] }]
         });
         return response.text.trim();
     } catch (error) {
