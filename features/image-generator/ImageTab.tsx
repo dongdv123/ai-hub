@@ -18,6 +18,26 @@ const ImageTab: React.FC = () => {
   const [maskImage, setMaskImage] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState(import.meta.env.VITE_RUNWARE_MODEL || 'runware:100@1');
   const [numberResults, setNumberResults] = useState(1);
+  const [copyingIndex, setCopyingIndex] = useState<number | null>(null);
+
+  const handleCopyImage = async (imgUrl: string, index: number) => {
+    try {
+      setCopyingIndex(index);
+      const response = await fetch(imgUrl);
+      const blob = await response.blob();
+      
+      // Create a clipboard item. Most browsers support image/png and image/jpeg.
+      const item = new ClipboardItem({ [blob.type]: blob });
+      await navigator.clipboard.write([item]);
+      
+      setTimeout(() => setCopyingIndex(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy image:', err);
+      setCopyingIndex(null);
+      // Fallback: simple notification or alert
+      alert("Không thể copy ảnh. Thử lại hoặc chuột phải vào ảnh chọn 'Copy Image'.");
+    }
+  };
 
   const models = [
     { id: 'runware:100@1', name: 'Flux.1 Schnell (Fast)' },
@@ -126,7 +146,6 @@ const ImageTab: React.FC = () => {
     <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-lg">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-teal-600 uppercase tracking-wide">Beta</p>
           <h2 className="text-2xl font-bold text-gray-800 mt-1">Tạo ảnh với AI</h2>
           <p className="text-gray-600 mt-2">
             Nhập mô tả, hoặc tải ảnh lên để chỉnh sửa (Inpainting/Img2Img).
@@ -318,14 +337,28 @@ const ImageTab: React.FC = () => {
                               alt={`Generated ${index + 1}`} 
                               className="w-full h-auto object-contain rounded-lg shadow-sm bg-white"
                           />
-                          <a 
-                              href={imgUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="absolute bottom-2 right-2 bg-white/80 hover:bg-white text-gray-800 text-xs px-2 py-1 rounded shadow backdrop-blur-sm transition opacity-0 group-hover:opacity-100"
-                          >
-                              Mở ảnh gốc
-                          </a>
+                          <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                             <button
+                                onClick={() => handleCopyImage(imgUrl, index)}
+                                className="bg-white/90 hover:bg-white text-gray-700 hover:text-teal-600 p-1.5 rounded-md shadow-sm backdrop-blur-sm transition-colors border border-gray-200"
+                                title="Copy ảnh vào clipboard"
+                             >
+                                {copyingIndex === index ? (
+                                   <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                ) : (
+                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                                )}
+                             </button>
+                             <a 
+                                href={imgUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="bg-white/90 hover:bg-white text-gray-700 hover:text-teal-600 p-1.5 rounded-md shadow-sm backdrop-blur-sm transition-colors border border-gray-200"
+                                title="Mở ảnh gốc"
+                             >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                             </a>
+                          </div>
                       </div>
                   ))}
               </div>
