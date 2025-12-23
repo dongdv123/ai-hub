@@ -18,6 +18,7 @@ const ImageTab: React.FC = () => {
   const [maskImage, setMaskImage] = useState<string | null>(null);
   const [maskPosition, setMaskPosition] = useState<string | null>(null);
   const [maskSize, setMaskSize] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{width: number, height: number} | null>(null);
   const [selectedModel, setSelectedModel] = useState(import.meta.env.VITE_RUNWARE_MODEL || 'runware:100@1');
   const [numberResults, setNumberResults] = useState(1);
   const [copyingIndex, setCopyingIndex] = useState<number | null>(null);
@@ -25,19 +26,60 @@ const ImageTab: React.FC = () => {
   const handleCopyImage = async (imgUrl: string, index: number) => {
     try {
       setCopyingIndex(index);
+      
+      // Fetch the image
       const response = await fetch(imgUrl);
       const blob = await response.blob();
       
-      // Create a clipboard item. Most browsers support image/png and image/jpeg.
-      const item = new ClipboardItem({ [blob.type]: blob });
+      // Most browsers only support copying PNG to clipboard
+      // We'll use a canvas to convert the image to PNG if it's not already
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = URL.createObjectURL(blob);
+      });
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error("Could not get canvas context");
+      
+      ctx.drawImage(img, 0, 0);
+      
+      const pngBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (!pngBlob) throw new Error("Could not create PNG blob");
+      
+      const item = new ClipboardItem({ 'image/png': pngBlob });
       await navigator.clipboard.write([item]);
       
       setTimeout(() => setCopyingIndex(null), 2000);
     } catch (err) {
       console.error('Failed to copy image:', err);
       setCopyingIndex(null);
-      // Fallback: simple notification or alert
-      alert("Không thể copy ảnh. Thử lại hoặc chuột phải vào ảnh chọn 'Copy Image'.");
+      alert("Không thể copy ảnh trực tiếp. Thử lại hoặc chuột phải vào ảnh chọn 'Copy Image'.");
+    }
+  };
+
+  const handleDownloadImage = async (imgUrl: string, index: number) => {
+    try {
+      const response = await fetch(imgUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `etsy-image-${Date.now()}-${index + 1}.png`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to download image:', err);
+      // Fallback: open in new tab
+      window.open(imgUrl, '_blank');
     }
   };
 
@@ -60,15 +102,40 @@ const ImageTab: React.FC = () => {
     setGeneratedImages([]);
 
     try {
+      // Supported dimensions by Runware FLUX models
+      const supportedDimensions = [
+        { w: 1024, h: 1024, ratio: 1 },
+        { w: 1184, h: 896, ratio: 1184/896 },
+        { w: 1248, h: 832, ratio: 1248/832 },
+        { w: 1376, h: 768, ratio: 1376/768 },
+        { w: 896, h: 1184, ratio: 896/1184 },
+        { w: 832, h: 1248, ratio: 832/1248 },
+        { w: 768, h: 1376, ratio: 768/1376 }
+      ];
+
       let width = 1024;
       let height = 1024;
 
-      if (aspectRatio === 'Portrait (4:5)') {
-        width = 896;
-        height = 1120;
-      } else if (aspectRatio === 'Landscape (16:9)') {
-        width = 1280;
-        height = 720;
+      if (seedImage && imageDimensions) {
+        // Find closest supported dimensions based on uploaded image aspect ratio
+        const targetRatio = imageDimensions.width / imageDimensions.height;
+        const closest = supportedDimensions.reduce((prev, curr) => {
+          return Math.abs(curr.ratio - targetRatio) < Math.abs(prev.ratio - targetRatio) ? curr : prev;
+        });
+        width = closest.w;
+        height = closest.h;
+      } else {
+        // Map UI selection to exact supported dimensions
+        switch (aspectRatio) {
+          case 'Square (1:1)': width = 1024; height = 1024; break;
+          case 'Landscape (4:3)': width = 1184; height = 896; break;
+          case 'Landscape (3:2)': width = 1248; height = 832; break;
+          case 'Landscape (16:9)': width = 1376; height = 768; break;
+          case 'Portrait (3:4)': width = 896; height = 1184; break;
+          case 'Portrait (2:3)': width = 832; height = 1248; break;
+          case 'Portrait (9:16)': width = 768; height = 1376; break;
+          default: width = 1024; height = 1024;
+        }
       }
 
       let finalPrompt = prompt;
@@ -77,7 +144,7 @@ const ImageTab: React.FC = () => {
       if (selectedModel.startsWith('google:')) {
           const refined = await refinePrompt(prompt, style, maskPosition || undefined, maskSize || undefined);
           finalPrompt = refined;
-          setPrompt(refined); // Show refined prompt to user
+          // Prompt (Mô tả) chỉ để người dùng nhập, không tự động cập nhật vào UI
       }
 
       // Add position and size info to prompt if using mask
@@ -288,8 +355,12 @@ const ImageTab: React.FC = () => {
 
           <div className="border-t border-gray-100 pt-4">
              <ImageMasker 
-                onImageChange={setSeedImage} 
+                onImageChange={(img) => {
+                    setSeedImage(img);
+                    if (!img) setImageDimensions(null);
+                }} 
                 onMaskChange={setMaskImage} 
+                onDimensionsChange={(w, h) => setImageDimensions({width: w, height: h})}
                 onAnalyzeRegion={(analyzedPrompt, pos, size) => {
                     setPrompt(analyzedPrompt);
                     if (pos) setMaskPosition(pos);
@@ -358,8 +429,12 @@ const ImageTab: React.FC = () => {
                 disabled={isLoading}
               >
                 <option>Square (1:1)</option>
-                <option>Portrait (4:5)</option>
+                <option>Landscape (4:3)</option>
+                <option>Landscape (3:2)</option>
                 <option>Landscape (16:9)</option>
+                <option>Portrait (3:4)</option>
+                <option>Portrait (2:3)</option>
+                <option>Portrait (9:16)</option>
               </select>
             </div>
           </div>
@@ -451,6 +526,13 @@ const ImageTab: React.FC = () => {
                                 ) : (
                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
                                 )}
+                             </button>
+                             <button
+                                onClick={() => handleDownloadImage(imgUrl, index)}
+                                className="bg-white/90 hover:bg-white text-gray-700 hover:text-teal-600 p-1.5 rounded-md shadow-sm backdrop-blur-sm transition-colors border border-gray-200"
+                                title="Tải ảnh về máy"
+                             >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                              </button>
                              <a 
                                 href={imgUrl} 

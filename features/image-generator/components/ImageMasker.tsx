@@ -7,11 +7,12 @@ import { analyzeImageRegion } from '../../seo-assistant/services/geminiService';
 interface ImageMaskerProps {
     onImageChange: (imageBase64: string | null) => void;
     onMaskChange: (maskBase64: string | null) => void;
+    onDimensionsChange?: (width: number, height: number) => void;
     onAnalyzeRegion?: (prompt: string, position?: string, size?: string) => void;
     onPositionChange?: (position: string, size: string) => void;
 }
 
-const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, onAnalyzeRegion, onPositionChange }) => {
+const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, onDimensionsChange, onAnalyzeRegion, onPositionChange }) => {
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [brushSize, setBrushSize] = useState(30);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,21 +25,6 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
     const [maskBounds, setMaskBounds] = useState<{minX: number, minY: number, maxX: number, maxY: number} | null>(null);
     const [lastPosition, setLastPosition] = useState<string>("");
     const [lastSize, setLastSize] = useState<string>("");
-
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const result = event.target?.result as string;
-                setImageSrc(result);
-                onImageChange(result);
-                // Reset mask
-                clearMask();
-            };
-            reader.readAsDataURL(file);
-        }
-    };
 
     const clearMask = useCallback(() => {
         const canvas = canvasRef.current;
@@ -54,6 +40,56 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
             }
         }
     }, [onMaskChange, onPositionChange]);
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            processFile(file);
+        }
+    };
+
+    const processFile = (file: File) => {
+        if (!file.type.startsWith('image/')) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const result = event.target?.result as string;
+            setImageSrc(result);
+            onImageChange(result);
+            // Reset mask
+            clearMask();
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handlePaste = useCallback((e: ClipboardEvent) => {
+        // Tránh xử lý nếu người dùng đang nhập vào ô input hoặc textarea
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+            return;
+        }
+
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const blob = items[i].getAsFile();
+                if (blob) {
+                    processFile(blob);
+                    // Ngăn chặn hành vi paste mặc định nếu đã tìm thấy và xử lý ảnh
+                    e.preventDefault();
+                    break;
+                }
+            }
+        }
+    }, [onImageChange, clearMask]);
+
+    useEffect(() => {
+        window.addEventListener('paste', handlePaste);
+        return () => {
+            window.removeEventListener('paste', handlePaste);
+        };
+    }, [handlePaste]);
 
     const getMousePos = (e: React.MouseEvent | React.TouchEvent) => {
         const canvas = canvasRef.current;
@@ -107,7 +143,7 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
         ctx.globalCompositeOperation = 'source-over';
         ctx.beginPath();
         ctx.arc(x, y, scaledBrushSize / 2, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 1)'; // White mask
+        ctx.fillStyle = 'rgba(239, 68, 68, 1)'; // Red color (Tailwind red-500)
         ctx.fill();
 
         // Update bounds locally for this drawing session
@@ -176,12 +212,18 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
             const tempCtx = tempCanvas.getContext('2d');
             
             if (tempCtx) {
-                // Fill with black (keep)
+                // Background: Black (the area to KEEP)
                 tempCtx.fillStyle = 'black';
                 tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
                 
-                // Draw our transparent-white drawing on top
+                // We want to turn our red drawing into white for the mask (the area to CHANGE)
+                // 1. Draw our current canvas (which has red paint)
                 tempCtx.drawImage(canvas, 0, 0);
+                
+                // 2. Use globalCompositeOperation 'source-in' to fill only the drawn pixels with white
+                tempCtx.globalCompositeOperation = 'source-in';
+                tempCtx.fillStyle = 'white';
+                tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
                 
                 onMaskChange(tempCanvas.toDataURL('image/png'));
             }
@@ -208,6 +250,10 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
             // Set canvas CSS display size to match the DISPLAYED image size
             canvasRef.current.style.width = `${imageRef.current.clientWidth}px`;
             canvasRef.current.style.height = `${imageRef.current.clientHeight}px`;
+
+            if (onDimensionsChange) {
+                onDimensionsChange(imageRef.current.naturalWidth, imageRef.current.naturalHeight);
+            }
             
             clearMask();
         }
@@ -377,7 +423,7 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <p className="text-[11px]">
-                            Vẽ lên vùng ảnh bạn muốn thay đổi. Vùng được tô trắng sẽ được AI vẽ lại.
+                            Vẽ lên vùng ảnh bạn muốn thay đổi. Vùng được tô đỏ sẽ được AI vẽ lại.
                         </p>
                     </div>
                 </div>

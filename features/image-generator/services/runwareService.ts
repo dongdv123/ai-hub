@@ -104,9 +104,10 @@ export const generateImage = async (
         numberResults: 1, // Each task generates 1 image for maximum parallelism
         outputType: "URL",
         outputFormat: "WEBP",
+        // Thêm seed ngẫu nhiên rõ ràng cho mỗi task để đảm bảo tính đa dạng
+        seed: Math.floor(Math.random() * 1000000),
         ...(effectiveSteps && { steps: effectiveSteps }),
         ...(effectiveScheduler && { scheduler: effectiveScheduler }),
-        ...(effectiveCFGScale && { CFGScale: effectiveCFGScale }),
         ...(seedImage && !effectiveModel.includes("prunaai") && { seedImage: cleanBase64(seedImage), strength: effectiveStrength }),
         ...(seedImage && effectiveModel.includes("prunaai") && { inputs: { referenceImages: [cleanBase64(seedImage)] } }),
         ...(maskImage && !effectiveModel.includes("prunaai") && { maskImage: cleanBase64(maskImage) })
