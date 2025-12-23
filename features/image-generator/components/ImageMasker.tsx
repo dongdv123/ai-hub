@@ -385,6 +385,8 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
                             </Button>
                         </div>
                     </div>
+                    {/* Vị trí và kích thước được ẩn trên UI theo yêu cầu, chỉ dùng để gửi API */}
+                    {/* 
                     {lastPosition && (
                         <div className="flex gap-2 text-xs text-teal-700 bg-teal-50 p-2 rounded border border-teal-100 mb-2">
                             <span className="font-semibold">Vị trí: {lastPosition}</span>
@@ -392,6 +394,7 @@ const ImageMasker: React.FC<ImageMaskerProps> = ({ onImageChange, onMaskChange, 
                             <span className="font-semibold">Kích thước: {lastSize}</span>
                         </div>
                     )}
+                    */}
 
                     <div 
                         ref={containerRef}
