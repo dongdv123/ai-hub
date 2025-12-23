@@ -286,19 +286,19 @@ const ImageTab: React.FC = () => {
   };
 
   const handleGenerateSEO = async () => {
-    if (!prompt.trim()) {
-        setError("Vui lòng nhập Prompt trước khi tạo SEO.");
+    if (!prompt.trim() && !seedImage) {
+        setError("Vui lòng nhập Prompt hoặc tải ảnh lên trước khi tạo SEO.");
         return;
     }
     setIsLoading(true);
     try {
-        const metadata = await generateSEOMetadata(prompt);
+        const metadata = await generateSEOMetadata(prompt, seedImage || undefined);
         if (metadata.title) setCurrentTitle(metadata.title);
         if (metadata.tags && metadata.tags.length > 0) setCurrentTags(metadata.tags);
         setError(null);
     } catch (err) {
         console.error(err);
-        setError("Không thể tạo SEO từ Prompt.");
+        setError("Không thể tạo SEO từ Image/Prompt.");
     } finally {
         setIsLoading(false);
     }
@@ -329,13 +329,13 @@ const ImageTab: React.FC = () => {
                 variant="outline" 
                 size="sm" 
                 onClick={handleGenerateSEO}
-                disabled={isLoading || !prompt.trim()}
+                disabled={isLoading || (!prompt.trim() && !seedImage)}
                 className="text-amber-600 border-amber-600 hover:bg-amber-50"
             >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-                Tạo SEO từ Prompt
+                Tạo SEO từ Image
             </Button>
         </div>
       </div>

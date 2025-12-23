@@ -386,7 +386,7 @@ export const analyzeImageRegion = async (imageBase64: string, maskBase64: string
     }
 };
 
-export const generateSEOMetadata = async (prompt: string): Promise<{ title: string; tags: string[] }> => {
+export const generateSEOMetadata = async (prompt: string, imageBase64?: string): Promise<{ title: string; tags: string[] }> => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : "") || "";
     if (!apiKey) return { title: "", tags: [] };
     
@@ -407,14 +407,28 @@ export const generateSEOMetadata = async (prompt: string): Promise<{ title: stri
     };
 
     try {
+        const parts: any[] = [
+            { text: `Based on this ${imageBase64 ? 'image and its ' : ''}description (prompt), generate a SEO-optimized Etsy Title and exactly 13 Tags.
+                Everything must be in English.
+                The title should be clear and descriptive.
+                The tags should be relevant long-tail keywords.
+                Prompt: ${prompt}` }
+        ];
+
+        if (imageBase64) {
+            const data = imageBase64.includes(';base64,') ? imageBase64.split(';base64,')[1] : imageBase64;
+            parts.push({
+                inlineData: {
+                    mimeType: "image/png",
+                    data: data
+                }
+            });
+        }
+
         const response = await ai.models.generateContent({
             model,
             contents: { 
-                parts: [{ text: `Based on this image description (prompt), generate a SEO-optimized Etsy Title and exactly 13 Tags.
-                    Everything must be in English.
-                    The title should be clear and descriptive.
-                    The tags should be relevant long-tail keywords.
-                    Prompt: ${prompt}` }] 
+                parts: parts 
             },
             config: {
                 responseMimeType: "application/json",
