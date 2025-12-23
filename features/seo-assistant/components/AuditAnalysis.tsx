@@ -60,25 +60,33 @@ const AuditAnalysis: React.FC<AuditAnalysisProps> = ({ data }) => {
                 </tr>
               </thead>
               <tbody>
-                {data.tagsAudit.filter(t => t.tag && t.tag.trim() !== '').map((tagAudit, index) => (
-                  <tr key={index} className="border-b border-gray-200 bg-white hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap align-top">
-                      {tagAudit.tag}
-                      {tagAudit.reason && (
-                        <p className="text-xs text-red-600/80 mt-1.5 font-normal italic max-w-xs whitespace-normal">
-                          <span className="font-bold not-italic">(!) Lý do:</span> {tagAudit.reason}
-                        </p>
-                      )}
+                {data && data.tagsAudit && Array.isArray(data.tagsAudit) && data.tagsAudit.length > 0 ? (
+                  data.tagsAudit.map((tagAudit, index) => (
+                    <tr key={index} className="border-b border-gray-200 bg-white hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap align-top">
+                        {tagAudit.tag || `Tag #${index + 1}`}
+                        {tagAudit.reason && (
+                          <p className="text-xs text-red-600/80 mt-1.5 font-normal italic max-w-xs whitespace-normal">
+                            <span className="font-bold not-italic">(!) Lý do:</span> {tagAudit.reason}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center align-middle">
+                        <MagnitudeDisplay value={tagAudit.volume} magnitude={tagAudit.volumeMagnitude} context="volume" />
+                      </td>
+                      <td className="px-4 py-3 text-center align-middle">
+                        <MagnitudeDisplay value={tagAudit.competition} magnitude={tagAudit.competitionMagnitude} context="competition" />
+                      </td>
+                      <td className="px-4 py-3 text-center align-middle"><TagAuditBadge value={tagAudit.intentRelevance} /></td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-gray-500 italic">
+                      Không có dữ liệu kiểm toán tag. Vui lòng thử lại.
                     </td>
-                    <td className="px-4 py-3 text-center align-middle">
-                      <MagnitudeDisplay value={tagAudit.volume} magnitude={tagAudit.volumeMagnitude} context="volume" />
-                    </td>
-                    <td className="px-4 py-3 text-center align-middle">
-                      <MagnitudeDisplay value={tagAudit.competition} magnitude={tagAudit.competitionMagnitude} context="competition" />
-                    </td>
-                    <td className="px-4 py-3 text-center align-middle"><TagAuditBadge value={tagAudit.intentRelevance} /></td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

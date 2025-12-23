@@ -16,55 +16,38 @@ const tagSchema = {
     required: ['tag', 'volume', 'volumeMagnitude', 'competition', 'competitionMagnitude', 'intentRelevance']
 };
 
-const simpleTagSchema = {
-    type: Type.OBJECT,
-    properties: {
-        tag: { type: Type.STRING },
-        bucket: { type: Type.STRING, description: 'Bucket 1, 2, or 3' }
-    },
-    required: ['tag', 'bucket']
-};
-
 // --- Schemas for Sequential Calls ---
 
 const marketAnalysisSchema = {
     type: Type.OBJECT,
     properties: {
-        marketAnalysis: {
-            type: Type.OBJECT,
-            properties: {
-                nicheAnalysis: { type: Type.STRING, description: 'Phân tích từ khóa chính và thị trường ngách.' },
-                pricePositioning: { type: Type.STRING, description: 'Phân tích định vị giá của người dùng dựa trên kiến thức về ngách. KHÔNG đưa ra khoảng giá cụ thể.' }
-            },
-            required: ['nicheAnalysis', 'pricePositioning']
-        },
+        nicheAnalysis: { type: Type.STRING, description: 'Phân tích từ khóa chính và thị trường ngách.' },
+        pricePositioning: { type: Type.STRING, description: 'Phân tích định vị giá của người dùng dựa trên kiến thức về ngách. KHÔNG đưa ra khoảng giá cụ thể.' },
         dataSources: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
             description: 'Danh sách các nguồn dữ liệu đã sử dụng cho phân tích thị trường.'
         }
     },
-    required: ['marketAnalysis', 'dataSources']
+    required: ['nicheAnalysis', 'pricePositioning', 'dataSources']
 };
 
 const auditSchema = {
     type: Type.OBJECT,
     properties: {
-        audit: {
+        tagsAudit: { 
+            type: Type.ARRAY, 
+            items: tagSchema,
+            description: 'Danh sách kiểm toán cho TẤT CẢ các tag hiện tại của người dùng.'
+        },
+        titleAudit: {
             type: Type.OBJECT,
             properties: {
-                tagsAudit: { type: Type.ARRAY, items: tagSchema },
-                titleAudit: {
-                    type: Type.OBJECT,
-                    properties: {
-                        readability: { type: Type.STRING, description: 'Phân tích độ dễ đọc của tiêu đề.' },
-                        optimization: { type: Type.STRING, description: 'Phân tích tối ưu hóa từ khóa trong tiêu đề.' },
-                        waste: { type: Type.STRING, description: 'Phân tích các từ lãng phí trong tiêu đề.' }
-                    },
-                    required: ['readability', 'optimization', 'waste']
-                }
+                readability: { type: Type.STRING, description: 'Phân tích độ dễ đọc của tiêu đề.' },
+                optimization: { type: Type.STRING, description: 'Phân tích tối ưu hóa từ khóa trong tiêu đề.' },
+                waste: { type: Type.STRING, description: 'Phân tích các từ lãng phí trong tiêu đề.' }
             },
-            required: ['tagsAudit', 'titleAudit']
+            required: ['readability', 'optimization', 'waste']
         },
         dataSources: {
             type: Type.ARRAY,
@@ -72,7 +55,7 @@ const auditSchema = {
             description: 'Danh sách các nguồn dữ liệu đã sử dụng cho việc kiểm toán.'
         }
     },
-    required: ['audit', 'dataSources']
+    required: ['tagsAudit', 'titleAudit', 'dataSources']
 };
 
 const buildOptimizationSchema = (withImage: boolean) => {
@@ -91,8 +74,8 @@ const buildOptimizationSchema = (withImage: boolean) => {
               },
               newTags: { 
                 type: Type.ARRAY, 
-                items: simpleTagSchema, 
-                description: '13 tag mới được đề xuất.' 
+                items: tagSchema, 
+                description: '13 tag mới được đề xuất kèm phân tích chi tiết.' 
               },
               rationale: { type: Type.STRING, description: 'Phân tích ngắn gọn về ưu/nhược điểm của chiến lược này, tệp khách hàng mục tiêu, và tại sao seller nên chọn nó.' },
               sellerProfileAndAds: {
@@ -144,6 +127,50 @@ const buildOptimizationSchema = (withImage: boolean) => {
     };
 };
 
+// --- Helper Functions ---
+
+const extractJSON = (text: string) => {
+    try {
+        // Find the first '{' and last '}'
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        
+        if (start !== -1 && end !== -1 && end > start) {
+            let jsonStr = text.substring(start, end + 1);
+            
+            // Basic cleanup for common issues
+            jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+            
+            // Attempt to balance brackets if truncated
+            let openBraces = 0;
+            let openBrackets = 0;
+            let validEnd = -1;
+            
+            for (let i = 0; i < jsonStr.length; i++) {
+                if (jsonStr[i] === '{') openBraces++;
+                else if (jsonStr[i] === '}') openBraces--;
+                else if (jsonStr[i] === '[') openBrackets++;
+                else if (jsonStr[i] === ']') openBrackets--;
+                
+                if (openBraces === 0 && openBrackets === 0 && i > 0) {
+                    validEnd = i;
+                    break;
+                }
+            }
+            
+            if (validEnd !== -1) {
+                jsonStr = jsonStr.substring(0, validEnd + 1);
+            }
+            
+            return JSON.parse(jsonStr);
+        }
+        throw new Error("No valid JSON found in response");
+    } catch (e) {
+        console.error("JSON Extraction Error:", e, "Original text:", text);
+        throw e;
+    }
+};
+
 // --- Prompts for Sequential Calls ---
 
 const buildMarketAnalysisPrompt = (userInput: UserInput): string => {
@@ -184,6 +211,7 @@ const buildMarketAnalysisPrompt = (userInput: UserInput): string => {
 
 const buildAuditPrompt = (userInput: UserInput, marketAnalysisContext: string): string => {
     const keywordForSourcing = userInput.mainKeyword || userInput.currentTitle;
+    const auditTags = userInput.currentTags.filter(tag => tag.trim() !== '');
 
     return `
     You are an expert Etsy SEO and marketing strategist. Your task is to perform a Title & Tags Audit for a user's Etsy listing.
@@ -193,25 +221,37 @@ const buildAuditPrompt = (userInput: UserInput, marketAnalysisContext: string): 
     CONTEXT FROM MARKET ANALYSIS (Use this to inform your audit):
     ${marketAnalysisContext}
 
-    User's Listing Information:
+    **REQUIRED JSON STRUCTURE:**
+    You must return a JSON object exactly like this (fill with actual analysis):
+    {
+      "tagsAudit": [
+        {
+          "tag": "tên tag 1",
+          "volume": "1.2k/tháng",
+          "volumeMagnitude": "Trung bình",
+          "competition": "15k listings",
+          "competitionMagnitude": "Trung bình",
+          "intentRelevance": "Cao",
+          "reason": ""
+        }
+        ... (exactly ${auditTags.length} items)
+      ],
+      "titleAudit": {
+        "readability": "...",
+        "optimization": "...",
+        "waste": "..."
+      },
+      "dataSources": ["Google Trends", "Etsy Search"]
+    }
+
+    **USER LISTING TO AUDIT:**
     - Current Title: "${userInput.currentTitle}"
-    - Current 13 Tags: "${userInput.currentTags.filter(tag => tag.trim() !== '').join(', ')}"
+    - Current Tags (${auditTags.length} total):
+        ${auditTags.map((t, i) => `${i + 1}. ${t.trim()}`).join('\n        ')}
 
-    Perform the following analysis and structure your response strictly according to the provided JSON schema.
-
-    **Stage 1: Title & Tags Audit**
-    1.  **Tags Audit:** For each of the user's 13 tags, create an audit. Evaluate each tag on the following criteria:
-        -   **Search Volume (Khối lượng):** Provide an estimated monthly search volume, for example: '1.5k/tháng'.
-        -   **Volume Magnitude (Mức độ Khối lượng):** Classify the volume as "Cao", "Trung bình", or "Thấp" based on these rules: >5k/month is Cao, 1k-5k/month is Trung bình, <1k/month is Thấp.
-        -   **Competition (Độ Cạnh Tranh):** Provide an estimated number of competing listings, for example: '25k listings'.
-        -   **Competition Magnitude (Mức độ Cạnh tranh):** Classify the competition as "Cao", "Trung bình", or "Thấp" based on these rules: >50k listings is Cao, 10k-50k listings is Trung bình, <10k listings is Thấp.
-        -   **Intent Relevance (Độ Phù hợp Ý định):** Use "Cao", "Trung bình", or "Thấp" for evaluation.
-        **CRITICAL:** If a tag has 'Thấp' Intent Relevance, you **MUST** provide a brief explanation in the \`reason\` field explaining why it is not suitable.
-    2.  **Title Audit:** "Score" the current title based on Readability, Optimization, and Waste.
-
-    **Stage 2: Data Sources**
-    - List the primary data sources you used for this analysis.
-`;
+    Structure your entire response strictly according to the provided JSON schema. 
+    Double check that \`tagsAudit\` has exactly ${auditTags.length} items before responding.
+    `;
 };
 
 const buildOptimizationPrompt = (userInput: UserInput, marketAnalysisContext: string, auditContext: string): string => {
@@ -257,33 +297,31 @@ const buildOptimizationPrompt = (userInput: UserInput, marketAnalysisContext: st
     Perform the following and structure your response strictly according to the provided JSON schema.
 
     **Stage 1: 360° Optimization Strategy**
-    1.  **Title + Tags Packages:** Create exactly SIX distinct optimization packages. The six strategies are:
+    1.  **Title + Tags Packages:** Create exactly THREE distinct optimization packages. The three strategies are:
         - **Balanced Strategy (Chiến lược Cân bằng)**
         - **Super-Niche Strategy (Chiến lược Siêu ngách)**
         - **Broad Traffic Strategy (Chiến lược Kéo Traffic)**
-        - **Question-Based Strategy (Chiến lược Dựa trên câu hỏi)**
-        - **Event-Driven Strategy (Chiến lược Theo sự kiện):** Use current date (${currentDate}) for *upcoming* holidays.
-        - **Competitor-Angle Strategy (Chiến lược Góc nhìn đối thủ)**
 
         For each package, you MUST provide:
         - A **new, buyer-friendly Title (in English)**. ${titleInstruction} AVOID keyword stuffing.
         - 3-5 bullet points (in English).
         - A 'rationale' and a 'sellerProfileAndAds' object.
-        - A new set of 13 tags using the simple tag schema (tag + bucket).
+        - A new set of 13 tags with full analysis (volume, competition, etc.).
         
         **CRITICAL: THE "3-BUCKET" TAG STRATEGY (2025 METHOD)**
         For each package, the 13 tags **MUST** be a strategic mix from these three buckets to ensure a balanced portfolio:
-        -   **Bucket 1 (Visibility):** High volume, low competition.
-        -   **Bucket 2 (Reach):** High volume, medium competition.
-        -   **Bucket 3 (Bestseller):** High volume, high competition.
-        
-        **ABSOLUTE RULES FOR TAGS:**
-        -   **NO REPETITION:** Do NOT use the same word in multiple tags.
-        -   **NO ATTRIBUTE/CATEGORY REPETITION:** Do NOT use a tag for something already in the product's attributes or category.
-        -   **NO PLURALS/MISSPELLINGS:** Do NOT add both "mug" and "mugs".
-        -   **NO GENERIC TERMS:** Do NOT use single, vague tags like "gift", "art".
+        -   **Bucket 1: Visibility Keywords (Từ khóa Hiển thị):** Keywords with HIGH search volume and LOW competition. These are your "low-hanging fruit".
+        -   **Bucket 2: Reach Keywords (Từ khóa Tiếp cận):** Keywords with HIGH search volume and MEDIUM competition.
+        -   **Bucket 3: Bestseller Keywords (Từ khóa Bán chạy):** Keywords with HIGH search volume and HIGH competition. You use these strategically to compete directly with top listings.
 
-    2.  **Top 20 Related Keywords:** First, identify the primary subject from "${productConcept}" (e.g., for 'peacock suncatcher', the subject is 'peacock'). Then, generate a list of the top 20 most effective related keywords for that subject. These should be creative and useful for expanding reach. For each keyword, provide a full analysis (volume, competition, intent relevance).
+        **ABSOLUTE RULES FOR TAGS (CÁC ĐIỀU CẤM KỴ):**
+        -   **NO REPETITION:** Do NOT use the same word in multiple tags (e.g., "bird art" and "bird design" is bad).
+        -   **NO ATTRIBUTE/CATEGORY REPETITION:** Do NOT use a tag for something already in the product's attributes (color, material) or category. This is the biggest waste of space.
+        -   **NO PLURALS/MISSPELLINGS:** Do NOT add both "mug" and "mugs". Etsy handles this automatically.
+        -   **NO GENERIC TERMS:** Do NOT use single, vague tags like "gift", "art", "shirt".
+        -   **THINK CONCEPTUALLY:** Use multi-word phrases, synonyms (e.g., "tee" for "shirt"), regional terms (e.g., "grey" vs "gray"), and conceptual tags describing the style ("cottagecore clothing"), occasion ("housewarming gift"), or recipient ("gift for gardener").
+
+    2.  **Top 10 Related Keywords:** First, identify the primary subject from "${productConcept}" (e.g., for 'peacock suncatcher', the subject is 'peacock'). Then, generate a list of the top 10 most effective related keywords for that subject. These should be creative and useful for expanding reach. For each keyword, provide a full analysis (volume, competition, intent relevance).
     3.  **Attribute Recommendations:** Suggest important Etsy Attributes. These are critical for filtered searches.
     ${imageCritiquePrompt}
     
@@ -314,7 +352,7 @@ export const refinePrompt = async (prompt: string, style?: string, position?: st
 
         const response = await ai.models.generateContent({
             model,
-            contents: [{ role: 'user', parts: [{ text: `${instruction}\n\n${fullInput}` }] }]
+            contents: { parts: [{ text: `${instruction}\n\n${fullInput}` }] }
         });
         return response.text.trim();
     } catch (error) {
@@ -333,14 +371,13 @@ export const analyzeImageRegion = async (imageBase64: string, maskBase64: string
     try {
         const response = await ai.models.generateContent({
             model,
-            contents: [{ 
-                role: 'user',
+            contents: { 
                 parts: [
                     { text: "Analyze the area highlighted in white in the mask image relative to the original image. Describe only the object or element that needs to be replaced or modified in the highlighted area. Provide a short, concise description in English suitable for an image generation prompt." },
                     { inlineData: { mimeType: "image/png", data: imageBase64.split(',')[1] } },
                     { inlineData: { mimeType: "image/png", data: maskBase64.split(',')[1] } }
                 ] 
-            }]
+            }
         });
         return response.text.trim();
     } catch (error) {
@@ -372,21 +409,22 @@ export const generateSEOMetadata = async (prompt: string): Promise<{ title: stri
     try {
         const response = await ai.models.generateContent({
             model,
-            contents: [{ 
-                role: 'user', 
+            contents: { 
                 parts: [{ text: `Based on this image description (prompt), generate a SEO-optimized Etsy Title and exactly 13 Tags.
                     Everything must be in English.
                     The title should be clear and descriptive.
                     The tags should be relevant long-tail keywords.
-                    
                     Prompt: ${prompt}` }] 
-            }],
+            },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: schema,
             }
         });
-        const result = JSON.parse(response.text);
+        
+        // Use property .text if available (demo style), else fallback to .response.text()
+        const responseText = response.text || (response.response && typeof response.response.text === 'function' ? response.response.text() : "");
+        const result = extractJSON(responseText);
         return {
             title: result.title || "",
             tags: result.tags || []
@@ -410,39 +448,73 @@ export const getEtsyAnalysis = async (
     
     const ai = new GoogleGenAI({ apiKey });
     const withImage = !!userInput.imageBase64;
-    const model = "gemini-2.0-flash";
+    
+    // Stable model names for 2025
+    const fastModel = "gemini-2.0-flash"; 
+    const highQualityModel = "gemini-2.0-flash"; // Using flash for both to improve speed and reliability
 
     try {
         // Step 1: Market Analysis
         updateProgress("Giai đoạn 1: Phân tích Thị trường & Định giá...");
         const marketAnalysisResponse = await ai.models.generateContent({
-            model,
-            contents: [{ role: 'user', parts: [{ text: buildMarketAnalysisPrompt(userInput) }] }],
+            model: fastModel,
+            contents: { parts: [{ text: buildMarketAnalysisPrompt(userInput) }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: marketAnalysisSchema,
                 maxOutputTokens: 2048,
             },
         });
-        const marketAnalysisText = marketAnalysisResponse.text;
+        
+        const marketAnalysisText = marketAnalysisResponse.text || (marketAnalysisResponse.response && typeof marketAnalysisResponse.response.text === 'function' ? marketAnalysisResponse.response.text() : "");
+        
+        if (!marketAnalysisText) {
+            console.error("No response from AI at Stage 1. Response object:", marketAnalysisResponse);
+            throw new Error("Không nhận được phản hồi từ AI ở Giai đoạn 1. Vui lòng thử lại.");
+        }
 
-        // Step 2: Audit, using context from Step 1
-        updateProgress("Giai đoạn 2: Kiểm toán Title & Tags...");
-        const auditResponse = await ai.models.generateContent({
-            model,
-            contents: [{ role: 'user', parts: [{ text: buildAuditPrompt(userInput, marketAnalysisText) }] }],
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: auditSchema,
-                maxOutputTokens: 4096,
-            },
-        });
-        const auditText = auditResponse.text;
+        let marketAnalysisData;
+        try {
+            marketAnalysisData = extractJSON(marketAnalysisText);
+            console.log("Stage 1 Data:", marketAnalysisData);
+        } catch (e) {
+            console.error("Failed to parse marketAnalysisData:", marketAnalysisText);
+            throw new Error("Không thể phân tích kết quả Phân tích thị trường. Vui lòng thử lại.");
+        }
+
+    // Step 2: Audit, using context from Step 1
+    updateProgress("Giai đoạn 2: Kiểm toán Title & Tags...");
+    const auditResponse = await ai.models.generateContent({
+        model: fastModel,
+        contents: { parts: [{ text: buildAuditPrompt(userInput, JSON.stringify(marketAnalysisData)) }] },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: auditSchema,
+            maxOutputTokens: 8192,
+        },
+    });
+    
+    const auditText = auditResponse.text || (auditResponse.response && typeof auditResponse.response.text === 'function' ? auditResponse.response.text() : "");
+    
+    if (!auditText) {
+        console.error("No response from AI at Stage 2. Response object:", auditResponse);
+        throw new Error("Không nhận được phản hồi từ AI ở Giai đoạn 2. Vui lòng thử lại.");
+    }
+
+    let auditData;
+    try {
+        auditData = extractJSON(auditText);
+        console.log("Stage 2 Data:", auditData);
+        console.log(`Audit Stage 2 - Parsed ${auditData?.tagsAudit?.length || 0} tags.`);
+    } catch (e) {
+        console.error("Failed to parse auditData:", auditText);
+        throw new Error("Không thể phân tích kết quả Kiểm toán. Vui lòng thử lại.");
+    }
 
         // Step 3: Optimization Strategy, using context from Steps 1 & 2
         updateProgress("Giai đoạn 3: Tạo Chiến lược Tối ưu 360°...");
         const optimizationParts: any[] =
-            [{ text: buildOptimizationPrompt(userInput, marketAnalysisText, auditText) }];
+            [{ text: buildOptimizationPrompt(userInput, JSON.stringify(marketAnalysisData), auditText) }];
 
         if (userInput.imageBase64 && userInput.imageMimeType) {
             optimizationParts.push({
@@ -453,49 +525,33 @@ export const getEtsyAnalysis = async (
             });
         }
         
-        const optimizationResponse = await ai.models.generateContent({
-            model,
-            contents: [{ role: 'user', parts: optimizationParts }],
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: buildOptimizationSchema(withImage),
-                maxOutputTokens: 8192,
-            },
-        });
-        const optimizationText = optimizationResponse.text;
+    const optimizationResponse = await ai.models.generateContent({
+        model: highQualityModel,
+        contents: { parts: optimizationParts },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: buildOptimizationSchema(withImage),
+            maxOutputTokens: 8192,
+        },
+    });
+    
+    const optimizationText = optimizationResponse.text || (optimizationResponse.response && typeof optimizationResponse.response.text === 'function' ? optimizationResponse.response.text() : "");
+    
+    if (!optimizationText) {
+        console.error("No response from AI at Stage 3. Response object:", optimizationResponse);
+        throw new Error("Không nhận được phản hồi từ AI ở Giai đoạn 3. Vui lòng thử lại.");
+    }
+
+    let optimizationData;
+    try {
+        optimizationData = extractJSON(optimizationText);
+    } catch (e) {
+        console.error("Failed to parse optimizationData:", optimizationText);
+        throw new Error("Không thể phân tích kết quả Tối ưu hóa. Vui lòng thử lại.");
+    }
 
         updateProgress("Đang tổng hợp kết quả...");
 
-        // Combine all results
-        let marketAnalysisData, auditData, optimizationData;
-        
-        try {
-            marketAnalysisData = JSON.parse(marketAnalysisText);
-        } catch (e) {
-            console.error("Failed to parse marketAnalysisData:", marketAnalysisText);
-            throw e;
-        }
-
-        try {
-            auditData = JSON.parse(auditText);
-        } catch (e) {
-            console.error("Failed to parse auditData:", auditText);
-            throw e;
-        }
-
-        try {
-            optimizationData = JSON.parse(optimizationText);
-        } catch (e) {
-            // Try to fix common JSON issues if parsing fails
-            const fixedText = optimizationText.trim();
-            try {
-                optimizationData = JSON.parse(fixedText);
-            } catch (e2) {
-                console.error("Failed to parse optimizationData even after trim:", optimizationText);
-                throw e2;
-            }
-        }
-        
         const allDataSources = [
             ...(marketAnalysisData.dataSources || []),
             ...(auditData.dataSources || []),
@@ -503,24 +559,35 @@ export const getEtsyAnalysis = async (
         ];
 
         const finalResult: AnalysisResult = {
-            marketAnalysis: marketAnalysisData.marketAnalysis,
-            audit: auditData.audit,
+            marketAnalysis: {
+                nicheAnalysis: marketAnalysisData.nicheAnalysis,
+                pricePositioning: marketAnalysisData.pricePositioning
+            },
+            audit: {
+                tagsAudit: auditData.tagsAudit,
+                titleAudit: auditData.titleAudit
+            },
             optimizationStrategy: optimizationData.optimizationStrategy,
             dataSources: [...new Set(allDataSources)], // Remove duplicates
         };
         
-        if (!finalResult.marketAnalysis || !finalResult.audit || !finalResult.optimizationStrategy) {
-             throw new Error("Invalid response structure from sequential API calls.");
+        if (!finalResult.marketAnalysis.nicheAnalysis || !finalResult.audit.tagsAudit || !finalResult.optimizationStrategy) {
+             throw new Error("Cấu trúc phản hồi không hợp lệ từ AI. Vui lòng thử lại.");
         }
 
         return finalResult;
 
     } catch (error) {
         console.error("Error during sequential Gemini API calls:", error);
-        if (error instanceof Error && error.message.includes('JSON')) {
-            throw new Error("Failed to parse the response from the AI. The AI might have returned an unexpected format.");
+        if (error instanceof Error) {
+            if (error.message.includes('404')) {
+                throw new Error("Model Gemini không tìm thấy (404). Vui lòng kiểm tra quyền truy cập API Key.");
+            }
+            if (error.message.includes('429')) {
+                throw new Error("Hết hạn ngạch API (Rate limit). Vui lòng đợi một lát rồi thử lại.");
+            }
+            throw error;
         }
-        throw new Error("An error occurred while communicating with the AI. Please check your inputs and try again.");
+        throw new Error("Đã xảy ra lỗi khi kết nối với AI. Vui lòng kiểm tra đầu vào và thử lại.");
     }
 };
-
