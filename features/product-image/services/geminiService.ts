@@ -118,6 +118,37 @@ Part 2: Etsy SEO Generation
 
 Your output MUST strictly adhere to the provided JSON schema. Do not include any markdown formatting like \`\`\`json.`;
 
+export const testGeminiModel = async (modelId: string): Promise<boolean> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: modelId,
+            contents: { parts: [{ text: "ping" }] }
+        });
+        return !!(response && response.text);
+    } catch (error) {
+        console.error(`Test failed for Gemini model ${modelId}:`, error);
+        return false;
+    }
+};
+
+export const testImagenModel = async (modelId: string): Promise<boolean> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: modelId,
+            contents: { parts: [{ text: "A small red dot" }] },
+            config: { responseModalities: [Modality.IMAGE] }
+        });
+        
+        if (response && response.candidates && response.candidates[0]?.content?.parts) {
+            return response.candidates[0].content.parts.some(p => p.inlineData?.mimeType?.startsWith('image/'));
+        }
+        return false;
+    } catch (error) {
+        console.error(`Test failed for Imagen model ${modelId}:`, error);
+        return false;
+    }
+};
+
 export const analyzeProductAndGenerateSeo = async (
   images: ImagePayload[], 
   productName: string, 
@@ -256,8 +287,23 @@ export const generateFinalImages = async (
     modelId: string = 'gemini-2.5-flash-image'
 ): Promise<string[]> => {
     
+    const imageStatuses = prompts.map((_, i) => `Đang chờ...`);
+    
+    const updateProgress = () => {
+        const completed = imageStatuses.filter(s => s === 'Xong').length;
+        const failed = imageStatuses.filter(s => s === 'Thất bại').length;
+        const processing = imageStatuses.filter(s => s === 'Đang tạo...').length;
+        
+        if (completed + failed === prompts.length) {
+            onProgress(`Hoàn tất: ${completed} thành công, ${failed} thất bại.`);
+        } else {
+            onProgress(`Đang tạo đồng thời ${prompts.length} ảnh (${completed} đã xong, ${processing} đang xử lý)...`);
+        }
+    };
+
     const generateImageWithRetry = async (prompt: string, index: number): Promise<string> => {
         const MAX_RETRIES = 3;
+        // ... (rest of the imageParts logic is same)
         const imageParts: Part[] = images.flatMap(image => {
             const parts: Part[] = [{
                 inlineData: {
@@ -289,7 +335,9 @@ export const generateFinalImages = async (
 
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                onProgress(`Đang tạo hình ảnh ${index + 1}/${prompts.length}... (Lần thử ${attempt}/${MAX_RETRIES})`);
+                imageStatuses[index] = 'Đang tạo...';
+                updateProgress();
+                
                 const response = await ai.models.generateContent({
                     model: modelId,
                     contents: { parts: [...imageParts, textPart] },
@@ -297,21 +345,39 @@ export const generateFinalImages = async (
                 });
 
                 if (response.candidates && response.candidates[0]?.content?.parts) {
-                    for (const part of response.candidates[0].content.parts) {
-                        if (part.inlineData?.mimeType.startsWith('image/')) {
-                            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                        }
+                    const imagePart = response.candidates[0].content.parts.find(part => part.inlineData?.mimeType.startsWith('image/'));
+                    if (imagePart) {
+                        imageStatuses[index] = 'Xong';
+                        updateProgress();
+                        return `data:${imagePart.inlineData!.mimeType};base64,${imagePart.inlineData!.data}`;
                     }
                 }
-                throw new Error("AI không trả về hình ảnh hợp lệ.");
+                
+                // If we reach here, it means no image was returned. Check for safety filters.
+                const finishReason = response.candidates?.[0]?.finishReason;
+                if (finishReason === 'SAFETY') {
+                    throw new Error("Hình ảnh bị từ chối do bộ lọc an toàn của Google. Vui lòng thử đổi phong cách hoặc mô tả.");
+                }
+                
+                throw new Error(response.candidates?.[0]?.content?.parts?.[0]?.text || "AI không trả về hình ảnh hợp lệ.");
 
-            } catch (error) {
+            } catch (error: any) {
                 console.warn(`Lỗi khi tạo hình ảnh ${index + 1} (lần thử ${attempt}):`, error);
-                if (attempt < MAX_RETRIES) {
-                    onProgress(`Lỗi ở hình ảnh ${index + 1}. Đang thử lại sau 5 giây... (Lần thử ${attempt + 1}/${MAX_RETRIES})`);
+                
+                // Specific handling for common Google errors
+                let friendlyError = error.message || String(error);
+                if (friendlyError.includes("429")) friendlyError = "Hết hạn mức (Quota exceeded). Vui lòng đợi 1 phút.";
+                if (friendlyError.includes("404")) friendlyError = `Model ${modelId} không khả dụng.`;
+                if (friendlyError.includes("SAFETY")) friendlyError = "Nội dung bị bộ lọc an toàn chặn.";
+
+                if (attempt < MAX_RETRIES && !friendlyError.includes("SAFETY")) {
+                    imageStatuses[index] = `Thử lại ${attempt+1}...`;
+                    updateProgress();
                     await new Promise(resolve => setTimeout(resolve, 5000));
                 } else {
-                    const errorMessage = `Không thể tạo hình ảnh ${index + 1} sau ${MAX_RETRIES} lần thử. Lỗi: ${error instanceof Error ? error.message : String(error)}`;
+                    imageStatuses[index] = 'Thất bại';
+                    updateProgress();
+                    const errorMessage = `Lỗi: ${friendlyError}`;
                     throw new Error(`${errorMessage}. Prompt: ${prompt}`);
                 }
             }

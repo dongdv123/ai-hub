@@ -1,6 +1,20 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { analyzeProductAndGenerateSeo, generateFinalImages, ProductAnalysis, EtsySeoResult, createImageGenerationPlan, EditableImagePlan, constructPromptsFromPlan } from './services/geminiService';
-import { generateImage as generateRunwareImage } from '../image-generator/services/runwareService';
+import { 
+  analyzeProductAndGenerateSeo, 
+  generateFinalImages, 
+  ProductAnalysis, 
+  EtsySeoResult, 
+  createImageGenerationPlan, 
+  EditableImagePlan, 
+  constructPromptsFromPlan,
+  testGeminiModel,
+  testImagenModel
+} from './services/geminiService';
+import { 
+  generateImage as generateRunwareImage, 
+  generateBatchImages,
+  testRunwareModel
+} from '../image-generator/services/runwareService';
 import { fileToBase64, fileToDataURL } from './utils/fileUtils';
 import ImageUploader from './components/ImageUploader';
 import ImageGrid from './components/ImageGrid';
@@ -42,6 +56,9 @@ const ProductAssistantTab: React.FC = () => {
   
   const [etsySeoData, setEtsySeoData] = useState<EtsySeoResult | null>(null);
 
+  const [isTestingApis, setIsTestingApis] = useState<boolean>(false);
+  const [apiTestResults, setApiTestResults] = useState<Record<string, 'success' | 'failed' | 'testing'>>({});
+
   const [allImagePlans, setAllImagePlans] = useState<EditableImagePlan[]>([]);
   const [selectedPlanIndexes, setSelectedPlanIndexes] = useState<number[]>([0, 1, 2, 3]);
   const [maskUrls, setMaskUrls] = useState<(string | null)[]>([null, null, null]);
@@ -49,19 +66,22 @@ const ProductAssistantTab: React.FC = () => {
   const [tempImageBase64, setTempImageBase64] = useState<string | null>(null);
 
   const models = [
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Nhanh & Thông minh)' },
-    { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'Gemini 2.0 Flash-Lite (Siêu nhanh)' },
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Sâu sắc nhất)' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Ổn định)' },
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Mới nhất, Siêu nhanh)' },
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Mới nhất, Thông minh nhất)' },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Ổn định, Mạnh mẽ)' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Cân bằng)' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Kế thừa)' },
+    { id: 'gemini-pro-latest', name: 'Gemini Pro Latest (Ổn định cao)' },
+    { id: 'gemini-flash-latest', name: 'Gemini Flash Latest (Nhanh)' },
   ];
   const [selectedModel, setSelectedModel] = useState<string>(models[0].id);
 
   const imageModels = [
-    { id: 'runware:100@1', name: 'Flux.1 Schnell (Nhanh)' },
-    { id: 'runware:101@1', name: 'Flux.1 Dev (Chất lượng)' },
-    { id: 'runware:103@1', name: 'Flux.1 Pro (Cao cấp)' },
+    { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Pro Image (Mới nhất, Đẹp nhất)' },
+    { id: 'gemini-2.5-flash-image', name: 'Imagen 3 (Google - Nhanh)' },
+    { id: 'runware:100@1', name: 'Flux.1 Schnell (Runware - Siêu nhanh)' },
+    { id: 'runware:101@1', name: 'Flux.1 Dev (Runware - Chi tiết)' },
     { id: 'prunaai:1@1', name: 'Pruna AI (Tối ưu)' },
-    { id: 'gemini-2.5-flash-image', name: 'Imagen 3 (Google)' },
   ];
   const [selectedImageModel, setSelectedImageModel] = useState<string>(imageModels[0].id);
 
@@ -97,6 +117,67 @@ const ProductAssistantTab: React.FC = () => {
     if (step !== 'upload') {
         setStep('upload');
     }
+  };
+
+  const handleTestApis = async () => {
+    setIsTestingApis(true);
+    setApiTestResults({});
+    
+    const results: Record<string, 'success' | 'failed' | 'testing'> = {};
+    
+    [...models, ...imageModels].forEach(m => {
+      results[m.id] = 'testing';
+    });
+    setApiTestResults({...results});
+
+    const brainTests = models.map(async (m) => {
+      const ok = await testGeminiModel(m.id);
+      setApiTestResults(prev => ({ ...prev, [m.id]: ok ? 'success' : 'failed' }));
+    });
+
+    const imageTests = imageModels.map(async (m) => {
+      let ok = false;
+      if (m.id.startsWith('runware') || m.id.startsWith('prunaai')) {
+        ok = await testRunwareModel(m.id);
+      } else {
+        ok = await testImagenModel(m.id);
+      }
+      setApiTestResults(prev => ({ ...prev, [m.id]: ok ? 'success' : 'failed' }));
+    });
+
+    await Promise.all([...brainTests, ...imageTests]);
+    setIsTestingApis(false);
+  };
+
+  const renderApiTestResults = () => {
+    if (Object.keys(apiTestResults).length === 0 && !isTestingApis) return null;
+
+    return (
+      <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 animate-fade-in">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-gray-700">Kết quả kiểm tra API</h3>
+          {isTestingApis && <span className="text-xs text-teal-600 animate-pulse">Đang kiểm tra...</span>}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
+          {[...models, ...imageModels].map(m => (
+            <div key={m.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-100 text-xs">
+              <span className="text-gray-600 truncate mr-2">{m.name}</span>
+              {apiTestResults[m.id] === 'testing' && <div className="h-3 w-3 border-2 border-teal-500 border-t-transparent rounded-full animate-spin"></div>}
+              {apiTestResults[m.id] === 'success' && <span className="text-green-500 font-bold">✓ OK</span>}
+              {apiTestResults[m.id] === 'failed' && <span className="text-red-500 font-bold">✕ Lỗi</span>}
+            </div>
+          ))}
+        </div>
+        {!isTestingApis && (
+            <button 
+                onClick={() => setApiTestResults({})}
+                className="mt-3 text-xs text-gray-500 hover:text-gray-700 underline"
+            >
+                Đóng kết quả
+            </button>
+        )}
+      </div>
+    );
   };
 
   const startMasking = async (index: number) => {
@@ -234,28 +315,28 @@ const ProductAssistantTab: React.FC = () => {
             selectedImageModel
           );
         } else {
-          // Use Runware/Pruna AI for generation
+          // Use Runware/Pruna AI for generation - TRUE PARALLEL
           const seedImage = imagePayloads[0]?.base64;
           const maskImage = maskUrls[0] || undefined;
           
-          const generatedUrls: string[] = [];
-          for (let i = 0; i < prompts.length; i++) {
-            setGenerationStatus(`Đang tạo hình ảnh ${i + 1}/${prompts.length}...`);
-            const results = await generateRunwareImage(
-              prompts[i],
-              '', // style
-              1024, // width
-              1024, // height
-              seedImage,
-              maskImage,
-              selectedImageModel,
-              1 // numberResults
-            );
-            if (results && results.length > 0) {
-              generatedUrls.push(results[0].imageURL);
-            }
+          setGenerationStatus(`Đang gửi yêu cầu tạo ĐỒNG THỜI ${prompts.length} ảnh đến server AI...`);
+          
+          // Use generateBatchImages instead of a for-loop to ensure server-side parallelism
+          const results = await generateBatchImages(
+            prompts,
+            '', // style
+            1024, // width
+            1024, // height
+            seedImage,
+            maskImage,
+            selectedImageModel
+          );
+          
+          images = results.map(result => result.imageURL);
+          
+          if (images.length === 0) {
+            throw new Error("Không có hình ảnh nào được tạo ra thành công từ AI.");
           }
-          images = generatedUrls;
         }
 
       setGeneratedImages(images);
@@ -406,11 +487,7 @@ ${failedPrompt}
               </button>
             </div>
             
-             <div className="mt-12 text-center">
-                <a href="https://docs.google.com/forms/d/e/1FAIpQLScCxl03G0-rhiE_tAUP2227d_v2L2E794qYnE-2bE9Y6z-7_A/viewform" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">
-                    Gửi phản hồi về trải nghiệm của bạn
-                </a>
-            </div>
+             
           </div>
         );
       default:
@@ -536,6 +613,16 @@ ${failedPrompt}
                                 <option key={model.id} value={model.id}>{model.name}</option>
                             ))}
                         </select>
+                        <button 
+                            onClick={handleTestApis}
+                            disabled={isTestingApis}
+                            className="mt-2 text-xs text-teal-600 hover:text-teal-800 flex items-center gap-1 disabled:opacity-50"
+                        >
+                            {isTestingApis ? <div className="h-3 w-3 border-2 border-teal-500 border-t-transparent rounded-full animate-spin"></div> : '🔍'}
+                            Kiểm tra kết nối API cho tất cả models
+                        </button>
+
+                        {renderApiTestResults()}
                     </div>
                     
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
