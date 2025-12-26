@@ -125,6 +125,27 @@ const ProductAssistantTab: React.FC = () => {
     setShowCustomModelInput(false);
   };
 
+  const handleDeleteCustomModel = () => {
+    if (!selectedImageModel) return;
+    
+    // Check if it's a default model
+    if (defaultImageModels.some(dm => dm.id === selectedImageModel)) {
+        return;
+    }
+
+    if (!window.confirm('Bạn có chắc muốn xóa model này?')) return;
+
+    const updatedModels = imageModels.filter(m => m.id !== selectedImageModel);
+    setImageModels(updatedModels);
+
+    // Update local storage
+    const customModels = updatedModels.filter(m => !defaultImageModels.find(dm => dm.id === m.id));
+    localStorage.setItem('custom_image_models', JSON.stringify(customModels));
+
+    // Reset selection to first default model
+    setSelectedImageModel(defaultImageModels[0].id);
+  };
+
   useEffect(() => {
     setAllImagePlans(createImageGenerationPlan());
 
@@ -681,17 +702,32 @@ ${failedPrompt}
                                 </div>
                             )}
 
-                            <select 
-                                value={selectedImageModel} 
-                                onChange={(e) => setSelectedImageModel(e.target.value)}
-                                className="w-full text-sm p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none bg-white"
-                            >
-                                {imageModels.map(model => (
-                                    <option key={model.id} value={model.id}>
-                                        {model.name}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="flex gap-2">
+                                <select 
+                                    value={selectedImageModel} 
+                                    onChange={(e) => setSelectedImageModel(e.target.value)}
+                                    className="w-full text-sm p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none bg-white"
+                                >
+                                    {imageModels.map(model => (
+                                        <option key={model.id} value={model.id}>
+                                            {model.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                
+                                {/* Show delete button if selected model is custom */}
+                                {!defaultImageModels.some(dm => dm.id === selectedImageModel) && (
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={handleDeleteCustomModel}
+                                        title="Xóa Model này"
+                                        className="flex-shrink-0 px-3 bg-red-500 hover:bg-red-600 text-white"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                    </Button>
+                                )}
+                            </div>
                             <p className="text-[10px] text-teal-600 mt-1">
                                 * Chọn model phù hợp với phong cách ảnh bạn muốn tạo. Model Runware hỗ trợ tạo ảnh cực nhanh.
                             </p>

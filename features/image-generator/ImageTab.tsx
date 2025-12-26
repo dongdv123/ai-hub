@@ -23,6 +23,76 @@ const ImageTab: React.FC = () => {
   const [numberResults, setNumberResults] = useState(1);
   const [copyingIndex, setCopyingIndex] = useState<number | null>(null);
 
+  const defaultModels = [
+    { id: 'runware:100@1', name: 'Flux.1 Schnell (Fast)' },
+    { id: 'runware:101@1', name: 'Flux.1 Dev (Quality)' },
+    { id: 'runware:103@1', name: 'Flux.1 Pro (Premium)' },
+    { id: 'prunaai:1@1', name: 'Pruna AI (Optimized)' },
+    { id: 'google:gemini-2.0-flash', name: 'Gemini 2.0 Flash (Bộ não)' },
+  ];
+  const [models, setModels] = useState(defaultModels);
+  const [showCustomModelInput, setShowCustomModelInput] = useState(false);
+  const [customModelId, setCustomModelId] = useState('');
+
+  React.useEffect(() => {
+    const savedModels = localStorage.getItem('custom_image_models');
+    if (savedModels) {
+      try {
+        const parsed = JSON.parse(savedModels);
+        setModels([...defaultModels, ...parsed]);
+      } catch (e) {
+        console.error('Failed to parse custom models', e);
+      }
+    }
+  }, []);
+
+  const handleSaveCustomModel = () => {
+    if (!customModelId.trim()) return;
+    
+    const newModel = {
+      id: customModelId.trim(),
+      name: `Custom: ${customModelId.trim()}`
+    };
+
+    // Avoid duplicates
+    if (models.some(m => m.id === newModel.id)) {
+        alert('Model ID này đã tồn tại!');
+        return;
+    }
+
+    const updatedModels = [...models, newModel];
+    setModels(updatedModels);
+    
+    // Save only custom models to localStorage
+    const customModels = updatedModels.filter(m => !defaultModels.find(dm => dm.id === m.id));
+    localStorage.setItem('custom_image_models', JSON.stringify(customModels));
+    
+    setSelectedModel(newModel.id);
+    setCustomModelId('');
+    setShowCustomModelInput(false);
+  };
+
+  const handleDeleteCustomModel = () => {
+    if (!selectedModel) return;
+    
+    // Check if it's a default model
+    if (defaultModels.some(dm => dm.id === selectedModel)) {
+        return;
+    }
+
+    if (!window.confirm('Bạn có chắc muốn xóa model này?')) return;
+
+    const updatedModels = models.filter(m => m.id !== selectedModel);
+    setModels(updatedModels);
+
+    // Update local storage
+    const customModels = updatedModels.filter(m => !defaultModels.find(dm => dm.id === m.id));
+    localStorage.setItem('custom_image_models', JSON.stringify(customModels));
+
+    // Reset selection to first default model
+    setSelectedModel(defaultModels[0].id);
+  };
+
   const handleCopyImage = async (imgUrl: string, index: number) => {
     try {
       setCopyingIndex(index);
@@ -82,14 +152,6 @@ const ImageTab: React.FC = () => {
       window.open(imgUrl, '_blank');
     }
   };
-
-  const models = [
-    { id: 'runware:100@1', name: 'Flux.1 Schnell (Fast)' },
-    { id: 'runware:101@1', name: 'Flux.1 Dev (Quality)' },
-    { id: 'runware:103@1', name: 'Flux.1 Pro (Premium)' },
-    { id: 'prunaai:1@1', name: 'Pruna AI (Optimized)' },
-    { id: 'google:gemini-2.0-flash', name: 'Gemini 2.0 Flash (Bộ não)' },
-  ];
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -375,16 +437,68 @@ const ImageTab: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">AI Model (Bộ não)</label>
-            <select
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition"
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              disabled={isLoading}
-            >
-              {models.map(m => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+                <select
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition"
+                value={selectedModel}
+                onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'custom_new') {
+                        setShowCustomModelInput(true);
+                    } else {
+                        setSelectedModel(val);
+                        setShowCustomModelInput(false);
+                    }
+                }}
+                disabled={isLoading}
+                >
+                {models.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+                <option value="custom_new" className="font-bold text-teal-600">+ Thêm Model Khác...</option>
+                </select>
+
+                {/* Show delete button if selected model is custom */}
+                {!defaultModels.some(dm => dm.id === selectedModel) && selectedModel !== 'custom_new' && (
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDeleteCustomModel}
+                        title="Xóa Model này"
+                        className="flex-shrink-0 px-3 bg-red-500 hover:bg-red-600 text-white"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                    </Button>
+                )}
+            </div>
+            
+            {showCustomModelInput && (
+                <div className="mt-2 flex gap-2 animate-fade-in">
+                    <input 
+                        type="text" 
+                        placeholder="Nhập Model ID (VD: runware:100@1)" 
+                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        value={customModelId}
+                        onChange={(e) => setCustomModelId(e.target.value)}
+                    />
+                    <Button 
+                        size="sm"
+                        onClick={handleSaveCustomModel}
+                        disabled={!customModelId.trim()}
+                        className="bg-teal-600 hover:bg-teal-700 text-white"
+                    >
+                        Lưu
+                    </Button>
+                     <Button 
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowCustomModelInput(false)}
+                        className="text-gray-500"
+                    >
+                        Hủy
+                    </Button>
+                </div>
+            )}
           </div>
 
           <div>
