@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Task } from '../services/taskService';
-import ImageModal from './ImageModal';
+import ImageGrid from './ImageGrid';
 import ChevronLeftIcon from './icons/ChevronLeftIcon';
 import ChevronRightIcon from './icons/ChevronRightIcon';
 
@@ -12,9 +12,6 @@ const TASKS_PER_PAGE = 5;
 
 const CommunityHistory: React.FC<CommunityHistoryProps> = ({ tasks }) => {
   const [currentPage, setCurrentPage] = useState(1);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedTaskImages, setSelectedTaskImages] = useState<string[]>([]);
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
 
   const sortedTasks = [...tasks].sort((a, b) => b.timestamp - a.timestamp);
   const totalPages = Math.ceil(sortedTasks.length / TASKS_PER_PAGE);
@@ -34,27 +31,15 @@ const CommunityHistory: React.FC<CommunityHistoryProps> = ({ tasks }) => {
     });
   };
 
-  const openModal = (taskImages: string[], imageIndex: number) => {
-    setSelectedTaskImages(taskImages);
-    setSelectedImageIndex(imageIndex);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setSelectedTaskImages([]);
-    setSelectedImageIndex(null);
-  };
-
   const goToPage = (pageNumber: number) => {
       setCurrentPage(Math.max(1, Math.min(pageNumber, totalPages)));
   };
 
   return (
-    <div className="mt-16 animate-fade-in">
-      <h2 className="text-3xl font-bold mb-8 text-slate-800 text-center">Tác phẩm từ cộng đồng</h2>
+    <div className="animate-fade-in">
+      <h2 className="text-xl font-bold mb-4 text-slate-800">Tác phẩm từ cộng đồng</h2>
       {tasks.length === 0 ? (
-         <div className="bg-white/70 backdrop-blur-xl rounded-xl shadow-lg p-8 border border-slate-200 text-center">
+         <div className="bg-gray-50 rounded-xl p-8 border border-slate-200 text-center">
             <p className="text-slate-500">Chưa có tác phẩm nào từ cộng đồng. Hãy là người đầu tiên tạo ra hình ảnh!</p>
         </div>
       ) : (
@@ -66,17 +51,32 @@ const CommunityHistory: React.FC<CommunityHistoryProps> = ({ tasks }) => {
                     <h3 className="text-xl font-bold text-slate-800 mb-2 sm:mb-0">{task.productName}</h3>
                     <p className="text-sm text-slate-500 flex-shrink-0">{formatDate(task.timestamp)}</p>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {task.outputImageUrls.map((url, imgIndex) => (
-                        <div
-                        key={imgIndex}
-                        className="aspect-square bg-slate-100 rounded-lg overflow-hidden cursor-pointer transition-transform transform hover:scale-105 border border-slate-200"
-                        onClick={() => openModal(task.outputImageUrls, imgIndex)}
-                        >
-                        <img src={url} alt={`Ảnh đã tạo ${imgIndex + 1}`} className="w-full h-full object-cover" />
+
+                    {(task.seoTitle || (task.seoTags && task.seoTags.length > 0)) && (
+                        <div className="mb-4 bg-white/50 p-3 rounded-lg border border-slate-100">
+                            {task.seoTitle && (
+                                <div className="mb-2">
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tiêu đề SEO</span>
+                                    <p className="text-sm text-slate-800 mt-1">{task.seoTitle}</p>
+                                </div>
+                            )}
+                            
+                            {task.seoTags && task.seoTags.length > 0 && (
+                                <div>
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1">Tags</span>
+                                    <div className="flex flex-wrap gap-1">
+                                        {task.seoTags.map((tag, i) => (
+                                            <span key={i} className="inline-block px-2 py-1 bg-white border border-slate-200 rounded text-xs text-slate-600">
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    ))}
-                    </div>
+                    )}
+
+                    <ImageGrid images={task.outputImageUrls} />
                 </div>
                 ))}
             </div>
@@ -105,14 +105,6 @@ const CommunityHistory: React.FC<CommunityHistoryProps> = ({ tasks }) => {
                 </div>
             )}
         </>
-      )}
-
-      {modalOpen && selectedImageIndex !== null && (
-         <ImageModal 
-          images={selectedTaskImages}
-          initialIndex={selectedImageIndex}
-          onClose={closeModal}
-        />
       )}
     </div>
   );

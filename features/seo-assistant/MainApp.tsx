@@ -8,6 +8,7 @@ import Loader from './components/Loader';
 import HeroSection from './components/HeroSection';
 import ImageTab from '../image-generator/ImageTab';
 import ProductAssistantTab from '../product-image/ProductAssistantTab';
+import HistoryTab from '../product-image/HistoryTab';
 import { Button } from '@/components/ui/button';
 import { AppProvider, useAppContext } from './context/AppContext';
 
@@ -84,6 +85,18 @@ const SidebarNav: React.FC = () => (
                     }`}
                 >
                     Trợ lý sản phẩm
+                </NavLink>
+            </li>
+            <li>
+                <NavLink
+                    to="/history"
+                    className={({ isActive }) => `w-full text-left block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                            ? 'bg-teal-600 text-white'
+                            : 'text-gray-700 hover:bg-teal-50 hover:text-teal-700'
+                    }`}
+                >
+                    Lịch sử tạo
                 </NavLink>
             </li>
             <li>
@@ -351,6 +364,7 @@ const MainContent: React.FC<MainAppProps> = ({ user }) => {
                             } />
                             <Route path="/image" element={<ImageTab />} />
                             <Route path="/product-assistant" element={<ProductAssistantTab />} />
+                            <Route path="/history" element={<HistoryTab />} />
                             <Route path="/ads" element={
                                 <PlaceholderCard
                                     title="Tối ưu Quảng cáo"

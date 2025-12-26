@@ -3,6 +3,8 @@ export interface Task {
   timestamp: number;
   outputImageUrls: string[];
   productName: string;
+  seoTitle?: string;
+  seoTags?: string[];
 }
 
 const DB_KEY = 'ai_product_generation_tasks';

@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ChevronLeftIcon from './icons/ChevronLeftIcon';
 import ChevronRightIcon from './icons/ChevronRightIcon';
+import ClipboardIcon from './icons/ClipboardIcon';
+import CheckIcon from './icons/CheckIcon';
+import DownloadIcon from './icons/DownloadIcon';
 
 interface ImageModalProps {
   images: string[];
@@ -10,6 +13,7 @@ interface ImageModalProps {
 
 const ImageModal: React.FC<ImageModalProps> = ({ images, initialIndex, onClose }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [copied, setCopied] = useState(false);
 
   const goToPrevious = useCallback(() => {
     const isFirst = currentIndex === 0;
@@ -22,6 +26,51 @@ const ImageModal: React.FC<ImageModalProps> = ({ images, initialIndex, onClose }
     const newIndex = isLast ? 0 : currentIndex + 1;
     setCurrentIndex(newIndex);
   }, [currentIndex, images.length]);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+        const imageUrl = images[currentIndex];
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        await navigator.clipboard.write([
+            new ClipboardItem({
+                [blob.type]: blob
+            })
+        ]);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+        console.error("Copy failed", error);
+    }
+  };
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+        const imageUrl = images[currentIndex];
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `product-image-${currentIndex + 1}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error("Download failed", error);
+        const imageUrl = images[currentIndex];
+        const link = document.createElement('a');
+        link.href = imageUrl;
+        link.download = `product-image-${currentIndex + 1}.png`;
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -75,14 +124,32 @@ const ImageModal: React.FC<ImageModalProps> = ({ images, initialIndex, onClose }
         </div>
       </div>
 
-      {/* Close Button */}
-      <button
-        onClick={onClose}
-        className="absolute top-2 right-2 sm:top-4 sm:right-4 h-10 w-10 bg-white/20 text-white rounded-full flex items-center justify-center text-2xl font-bold shadow-lg hover:bg-white/40 transition"
-        aria-label="Đóng"
-      >
-        &times;
-      </button>
+      {/* Top Right Controls */}
+      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 flex items-center gap-3 z-50">
+          <button
+            onClick={handleCopy}
+            className="h-10 w-10 bg-white/20 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-white/40 transition"
+            title="Sao chép ảnh"
+          >
+             {copied ? <CheckIcon className="h-5 w-5 text-green-400" /> : <ClipboardIcon className="h-5 w-5" />}
+          </button>
+          
+          <button
+            onClick={handleDownload}
+            className="h-10 w-10 bg-white/20 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-white/40 transition"
+            title="Tải ảnh xuống"
+          >
+             <DownloadIcon className="h-5 w-5" />
+          </button>
+
+          <button
+            onClick={onClose}
+            className="h-10 w-10 bg-white/20 text-white rounded-full flex items-center justify-center text-2xl font-bold shadow-lg hover:bg-white/40 transition"
+            aria-label="Đóng"
+          >
+            &times;
+          </button>
+      </div>
 
       {/* Next Button */}
       <button

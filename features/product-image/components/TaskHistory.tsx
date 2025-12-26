@@ -1,16 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Task } from '../services/taskService';
-import ImageModal from './ImageModal';
+import ImageGrid from './ImageGrid';
 
 interface TaskHistoryProps {
   tasks: Task[];
 }
 
 const TaskHistory: React.FC<TaskHistoryProps> = ({ tasks }) => {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedTaskImages, setSelectedTaskImages] = useState<string[]>([]);
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
-
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleString('vi-VN', {
       year: 'numeric',
@@ -22,24 +18,12 @@ const TaskHistory: React.FC<TaskHistoryProps> = ({ tasks }) => {
     });
   };
 
-  const openModal = (taskImages: string[], imageIndex: number) => {
-    setSelectedTaskImages(taskImages);
-    setSelectedImageIndex(imageIndex);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setSelectedTaskImages([]);
-    setSelectedImageIndex(null);
-  };
-
   return (
-    <div className="mt-16 animate-fade-in">
-      <h2 className="text-3xl font-bold mb-8 text-gray-800 text-center">Lịch sử tạo của bạn</h2>
+    <div className="animate-fade-in">
+      <h2 className="text-xl font-bold mb-4 text-gray-800">Các phiên làm việc gần đây</h2>
       {tasks.length === 0 ? (
-         <div className="bg-white/70 backdrop-blur-xl rounded-xl shadow-lg p-8 border border-gray-200 text-center">
-            <p className="text-gray-500">Bạn chưa tạo hình ảnh nào. Các tác phẩm trước đây của bạn sẽ xuất hiện ở đây để dễ dàng truy cập.</p>
+         <div className="bg-gray-50 rounded-xl p-8 border border-gray-200 text-center">
+            <p className="text-gray-500">Bạn chưa tạo hình ảnh nào. Các tác phẩm trước đây của bạn sẽ xuất hiện ở đây.</p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -49,28 +33,35 @@ const TaskHistory: React.FC<TaskHistoryProps> = ({ tasks }) => {
                 <h3 className="text-xl font-bold text-gray-800 mb-2 sm:mb-0">{task.productName}</h3>
                 <p className="text-sm text-gray-500 flex-shrink-0">{formatDate(task.timestamp)}</p>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {task.outputImageUrls.map((url, imgIndex) => (
-                    <div
-                    key={imgIndex}
-                    className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer transition-transform transform hover:scale-105 border border-gray-200"
-                    onClick={() => openModal(task.outputImageUrls, imgIndex)}
-                    >
-                    <img src={url} alt={`Ảnh đã tạo ${imgIndex + 1}`} className="w-full h-full object-cover" />
+
+                {(task.seoTitle || (task.seoTags && task.seoTags.length > 0)) && (
+                    <div className="mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        {task.seoTitle && (
+                            <div className="mb-2">
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Tiêu đề SEO</span>
+                                <p className="text-sm text-gray-800 mt-1">{task.seoTitle}</p>
+                            </div>
+                        )}
+                        
+                        {task.seoTags && task.seoTags.length > 0 && (
+                            <div>
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Tags</span>
+                                <div className="flex flex-wrap gap-1">
+                                    {task.seoTags.map((tag, i) => (
+                                        <span key={i} className="inline-block px-2 py-1 bg-white border border-gray-200 rounded text-xs text-gray-600">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
-                ))}
-                </div>
+                )}
+
+                <ImageGrid images={task.outputImageUrls} />
             </div>
             ))}
         </div>
-      )}
-
-      {modalOpen && selectedImageIndex !== null && (
-         <ImageModal 
-          images={selectedTaskImages}
-          initialIndex={selectedImageIndex}
-          onClose={closeModal}
-        />
       )}
     </div>
   );

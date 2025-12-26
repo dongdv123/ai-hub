@@ -2,6 +2,7 @@ export interface RunwareImageResponse {
     imageURL: string;
     seed: number;
     NSFWContent: boolean;
+    cost?: number;
 }
 
 interface RunwareRequest {
@@ -14,6 +15,7 @@ interface RunwareRequest {
     numberResults: number;
     outputType: string;
     outputFormat: string;
+    includeCost?: boolean;
     steps?: number;
     scheduler?: string;
     CFGScale?: number;
@@ -77,7 +79,7 @@ export const generateImage = async (
     const taskType = import.meta.env.VITE_RUNWARE_TASK_TYPE || (typeof process !== 'undefined' ? process.env.VITE_RUNWARE_TASK_TYPE : "imageInference");
     const endpoint = import.meta.env.VITE_RUNWARE_ENDPOINT || (typeof process !== 'undefined' ? process.env.VITE_RUNWARE_ENDPOINT : "https://api.runware.ai/v1");
 
-    let model = modelFromEnv || "runware:100@1";
+    let model = modelId || modelFromEnv || "runware:100@1";
 
     // Pruna AI specific logic: 
     // prunaai:2@1 is for Image-to-Image (Edit)
@@ -140,6 +142,7 @@ export const generateImage = async (
         numberResults: 1, // Each task generates 1 image for maximum parallelism
         outputType: "URL",
         outputFormat: "WEBP",
+        includeCost: true,
         // Thêm seed ngẫu nhiên rõ ràng cho mỗi task để đảm bảo tính đa dạng
         seed: Math.floor(Math.random() * 1000000),
         ...(effectiveSteps && { steps: effectiveSteps }),
@@ -207,7 +210,7 @@ export const generateBatchImages = async (
     const taskType = import.meta.env.VITE_RUNWARE_TASK_TYPE || (typeof process !== 'undefined' ? process.env.VITE_RUNWARE_TASK_TYPE : "imageInference");
     const endpoint = import.meta.env.VITE_RUNWARE_ENDPOINT || (typeof process !== 'undefined' ? process.env.VITE_RUNWARE_ENDPOINT : "https://api.runware.ai/v1");
 
-    let model = modelFromEnv || "runware:100@1";
+    let model = modelId || modelFromEnv || "runware:100@1";
 
     if (model.includes("prunaai")) {
         if (!seedImage && model === "prunaai:2@1") {
@@ -258,6 +261,7 @@ export const generateBatchImages = async (
             numberResults: 1,
             outputType: "URL",
             outputFormat: "PNG",
+            includeCost: true,
             seed: Math.floor(Math.random() * 1000000),
             ...(seedImage && !model.includes("prunaai") && { seedImage: cleanBase64(seedImage), strength: effectiveStrength }),
             ...(seedImage && model.includes("prunaai") && { inputs: { referenceImages: [cleanBase64(seedImage)] } }),

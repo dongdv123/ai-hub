@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ImageModal from './ImageModal';
 import ClipboardIcon from './icons/ClipboardIcon';
 import CheckIcon from './icons/CheckIcon';
+import DownloadIcon from './icons/DownloadIcon';
 
 interface ImageGridProps {
   images: string[];
@@ -22,13 +23,51 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
     setSelectedImageIndex(null);
   };
 
-  const handleCopy = (e: React.MouseEvent, text: string, index: number) => {
+  const handleCopy = async (e: React.MouseEvent, imageUrl: string, index: number) => {
     e.stopPropagation(); // Prevent modal from opening
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    setTimeout(() => {
-        setCopiedIndex(null);
-    }, 2000);
+    try {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        await navigator.clipboard.write([
+            new ClipboardItem({
+                [blob.type]: blob
+            })
+        ]);
+        setCopiedIndex(index);
+        setTimeout(() => {
+            setCopiedIndex(null);
+        }, 2000);
+    } catch (error) {
+        console.error("Copy failed", error);
+        // Fallback to text copy if image copy fails (optional, but maybe safer not to confuse user)
+        // alert("Không thể sao chép hình ảnh. Vui lòng thử lại hoặc tải xuống.");
+    }
+  };
+
+  const handleDownload = async (e: React.MouseEvent, imageUrl: string, index: number) => {
+    e.stopPropagation();
+    try {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `generated-image-${index + 1}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error("Download failed", error);
+        // Fallback for when fetch fails
+        const link = document.createElement('a');
+        link.href = imageUrl;
+        link.download = `generated-image-${index + 1}.png`;
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
   };
 
   return (
@@ -38,31 +77,42 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
           <div key={index} className="flex flex-col gap-2">
             <div 
               className="relative group aspect-square bg-gray-200 rounded-lg shadow-md overflow-hidden transition-transform transform hover:scale-105 cursor-pointer border border-gray-200"
-              onMouseDown={(e) => {
-                  if (e.button === 0) {
-                      openModal(index);
-                  }
-              }}
             >
-              <img
-                src={imageSrc}
-                alt={`Góc chụp sản phẩm đã tạo ${index + 1}`}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs font-bold px-2 py-1 rounded">
+              <div 
+                  className="absolute inset-0 z-0"
+                  onClick={() => openModal(index)}
+              >
+                 <img
+                    src={imageSrc}
+                    alt={`Góc chụp sản phẩm đã tạo ${index + 1}`}
+                    className="w-full h-full object-cover pointer-events-none"
+                 />
+              </div>
+
+              <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs font-bold px-2 py-1 rounded pointer-events-none z-10">
                 Góc {index + 1}
               </div>
-              <button
-                  onClick={(e) => handleCopy(e, imageSrc, index)}
-                  className="absolute top-2 right-2 p-1.5 bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-white"
-                  aria-label="Sao chép URL dữ liệu hình ảnh"
-              >
-                  {copiedIndex === index ? (
-                      <CheckIcon className="h-5 w-5 text-green-400" />
-                  ) : (
-                      <ClipboardIcon className="h-5 w-5" />
-                  )}
-              </button>
+              
+              <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                  <button
+                      onClick={(e) => handleCopy(e, imageSrc, index)}
+                      className="p-1.5 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+                      title="Sao chép ảnh"
+                  >
+                      {copiedIndex === index ? (
+                          <CheckIcon className="h-4 w-4 text-green-400" />
+                      ) : (
+                          <ClipboardIcon className="h-4 w-4" />
+                      )}
+                  </button>
+                  <button
+                      onClick={(e) => handleDownload(e, imageSrc, index)}
+                      className="p-1.5 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+                      title="Tải ảnh xuống"
+                  >
+                      <DownloadIcon className="h-4 w-4" />
+                  </button>
+              </div>
             </div>
             <a
               href={imageSrc}

@@ -27,10 +27,10 @@ import EtsySeoDisplay from './components/EtsySeoDisplay';
 import Tooltip from './components/Tooltip';
 import QuestionMarkIcon from './components/icons/QuestionMarkIcon';
 import { Task, getUserTasks, addTask, getTasks } from './services/taskService';
-import TaskHistory from './components/TaskHistory';
-import CommunityHistory from './components/CommunityHistory';
 import ImageMasker from '../image-generator/components/ImageMasker';
 import { Button } from '@/components/ui/button';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 
 type Step = 'upload' | 'analyzing' | 'editing' | 'results';
@@ -51,8 +51,7 @@ const ProductAssistantTab: React.FC = () => {
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [generationCost, setGenerationCost] = useState<number | null>(null);
   
   const [etsySeoData, setEtsySeoData] = useState<EtsySeoResult | null>(null);
 
@@ -76,29 +75,63 @@ const ProductAssistantTab: React.FC = () => {
   ];
   const [selectedModel, setSelectedModel] = useState<string>(models[0].id);
 
-  const imageModels = [
+  const defaultImageModels = [
     { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Pro Image (Mới nhất, Đẹp nhất)' },
     { id: 'gemini-2.5-flash-image', name: 'Imagen 3 (Google - Nhanh)' },
     { id: 'runware:100@1', name: 'Flux.1 Schnell (Runware - Siêu nhanh)' },
     { id: 'runware:101@1', name: 'Flux.1 Dev (Runware - Chi tiết)' },
     { id: 'prunaai:1@1', name: 'Pruna AI (Tối ưu)' },
   ];
-  const [selectedImageModel, setSelectedImageModel] = useState<string>(imageModels[0].id);
+  const [imageModels, setImageModels] = useState(defaultImageModels);
+  const [selectedImageModel, setSelectedImageModel] = useState<string>(defaultImageModels[0].id);
+  const [showCustomModelInput, setShowCustomModelInput] = useState(false);
+  const [customModelId, setCustomModelId] = useState('');
 
   useEffect(() => {
-    setTasks(getUserTasks(USER_HASH));
-    setAllTasks(getTasks());
+    const savedModels = localStorage.getItem('custom_image_models');
+    if (savedModels) {
+      try {
+        const parsed = JSON.parse(savedModels);
+        setImageModels([...defaultImageModels, ...parsed]);
+      } catch (e) {
+        console.error('Failed to parse custom models', e);
+      }
+    }
+  }, []);
+
+  const handleSaveCustomModel = () => {
+    if (!customModelId.trim()) return;
+    
+    const newModel = {
+      id: customModelId.trim(),
+      name: `Custom: ${customModelId.trim()}`
+    };
+
+    // Avoid duplicates
+    if (imageModels.some(m => m.id === newModel.id)) {
+        alert('Model ID này đã tồn tại!');
+        return;
+    }
+
+    const updatedModels = [...imageModels, newModel];
+    setImageModels(updatedModels);
+    
+    // Save only custom models to localStorage
+    const customModels = updatedModels.filter(m => !defaultImageModels.find(dm => dm.id === m.id));
+    localStorage.setItem('custom_image_models', JSON.stringify(customModels));
+    
+    setSelectedImageModel(newModel.id);
+    setCustomModelId('');
+    setShowCustomModelInput(false);
+  };
+
+  useEffect(() => {
     setAllImagePlans(createImageGenerationPlan());
 
     return () => {
       previewUrls.forEach(url => URL.revokeObjectURL(url));
     };
   }, []); // Initial load and cleanup
-
-  const refreshTasks = () => {
-    setTasks(getUserTasks(USER_HASH));
-    setAllTasks(getTasks());
-  };
 
   const handleFilesChange = (newFiles: File[]) => {
     const combinedFiles = [...selectedFiles, ...newFiles];
@@ -137,10 +170,12 @@ const ProductAssistantTab: React.FC = () => {
 
     const imageTests = imageModels.map(async (m) => {
       let ok = false;
-      if (m.id.startsWith('runware') || m.id.startsWith('prunaai')) {
-        ok = await testRunwareModel(m.id);
-      } else {
+      // Models starting with 'gemini' or 'imagen' are Google models.
+      // Everything else is treated as Runware/CivitAI models.
+      if (m.id.startsWith('gemini') || m.id.startsWith('imagen')) {
         ok = await testImagenModel(m.id);
+      } else {
+        ok = await testRunwareModel(m.id);
       }
       setApiTestResults(prev => ({ ...prev, [m.id]: ok ? 'success' : 'failed' }));
     });
@@ -291,6 +326,7 @@ const ProductAssistantTab: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setGenerationCost(null);
     setGenerationStatus("Đang bắt đầu quá trình tạo hình ảnh...");
 
     try {
@@ -306,7 +342,7 @@ const ProductAssistantTab: React.FC = () => {
         const prompts = constructPromptsFromPlan(selectedPlans, analysisData!, productName, productDescription, vibe);
         let images: string[] = [];
 
-        if (selectedImageModel.startsWith('gemini-')) {
+        if (selectedImageModel.startsWith('gemini') || selectedImageModel.startsWith('imagen')) {
           // Use Gemini (Imagen) for generation
           images = await generateFinalImages(
             imagePayloads, 
@@ -334,6 +370,11 @@ const ProductAssistantTab: React.FC = () => {
           
           images = results.map(result => result.imageURL);
           
+          const totalCost = results.reduce((sum, result) => sum + (result.cost || 0), 0);
+          if (totalCost > 0) {
+            setGenerationCost(totalCost);
+          }
+
           if (images.length === 0) {
             throw new Error("Không có hình ảnh nào được tạo ra thành công từ AI.");
           }
@@ -346,9 +387,10 @@ const ProductAssistantTab: React.FC = () => {
         timestamp: Date.now(),
         outputImageUrls: images,
         productName: productName || 'Sản phẩm không tên',
+        seoTitle: etsySeoData?.title,
+        seoTags: etsySeoData?.tags
       };
       await addTask(newTask);
-      refreshTasks();
       
       setStep('results');
 
@@ -374,7 +416,7 @@ ${failedPrompt}
         setIsLoading(false);
         setGenerationStatus(null);
     }
-  }, [selectedFiles, analysisData, imagePlan, prompts, productName, maskUrls, allImagePlans, selectedPlanIndexes, selectedImageModel]);
+  }, [selectedFiles, analysisData, imagePlan, prompts, productName, maskUrls, allImagePlans, selectedPlanIndexes, selectedImageModel, etsySeoData]);
   
   const handleReset = () => {
     setStep('upload');
@@ -392,6 +434,7 @@ ${failedPrompt}
     setIsLoading(false);
     setIsDownloading(false);
     setGenerationStatus(null);
+    setGenerationCost(null);
     setEtsySeoData(null);
     setSelectedPlanIndexes([0, 1, 2, 3]);
     setMaskUrls([null, null, null]);
@@ -399,25 +442,33 @@ ${failedPrompt}
     setTempImageBase64(null);
   };
 
-  const handleDownloadAll = useCallback(() => {
+  const handleDownloadAll = useCallback(async () => {
     if (generatedImages.length === 0) return;
 
     setIsDownloading(true);
     setError(null);
 
     try {
-      generatedImages.forEach((imageSrc, index) => {
-        const link = document.createElement('a');
-        link.href = imageSrc;
-
-        const mimeType = imageSrc.match(/data:(image\/[a-z]+);/)?.[1] || 'image/png';
-        const extension = mimeType.split('/')[1] || 'png';
+        const zip = new JSZip();
         
-        link.download = `product-image-${index + 1}.${extension}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      });
+        // Add images to zip
+        const promises = generatedImages.map(async (imageSrc, index) => {
+            try {
+                const response = await fetch(imageSrc);
+                const blob = await response.blob();
+                const extension = blob.type.split('/')[1] || 'png';
+                zip.file(`product-image-${index + 1}.${extension}`, blob);
+            } catch (err) {
+                console.error(`Failed to add image ${index + 1} to zip`, err);
+            }
+        });
+
+        await Promise.all(promises);
+        
+        // Generate and download zip
+        const content = await zip.generateAsync({ type: "blob" });
+        saveAs(content, `product-images-${new Date().getTime()}.zip`);
+        
     } catch (err) {
       console.error("Failed to download images.", err);
       setError(err instanceof Error ? err.message : "Could not download images.");
@@ -457,7 +508,12 @@ ${failedPrompt}
       case 'results':
         return (
           <div className="w-full text-center animate-fade-in">
-            <h2 className="text-2xl font-bold mb-6 text-gray-800">Ảnh sản phẩm của bạn</h2>
+            <h2 className="text-2xl font-bold mb-2 text-gray-800">Ảnh sản phẩm của bạn</h2>
+            {generationCost !== null && (
+              <p className="text-sm text-gray-500 mb-6">
+                Chi phí tạo ảnh: <span className="font-mono font-medium text-teal-600">${generationCost.toFixed(5)}</span>
+              </p>
+            )}
             <ImageGrid images={generatedImages} />
 
              {etsySeoData && (
@@ -517,7 +573,7 @@ ${failedPrompt}
 
       <main className="w-full">
         {step === 'upload' ? (
-             <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl p-8 border border-gray-200 animate-fade-in">
+             <div className="mx-auto bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl p-8 border border-gray-200 animate-fade-in">
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center bg-teal-100 text-teal-700 font-bold text-sm px-3 py-1 rounded-full mb-2">
                         Bước 1
@@ -597,31 +653,69 @@ ${failedPrompt}
                     </div>
 
                     <div>
-                        <label htmlFor="image-model" className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                            Model tạo ảnh (Họa sĩ)
-                            <Tooltip content="Chọn phiên bản AI để tạo hình ảnh sản phẩm cuối cùng. Imagen 3 là model tạo ảnh tiên tiến nhất của Google.">
-                                <QuestionMarkIcon className="h-4 w-4 text-gray-400 cursor-help" />
-                            </Tooltip>
-                        </label>
-                        <select
-                            id="image-model"
-                            value={selectedImageModel}
-                            onChange={(e) => setSelectedImageModel(e.target.value)}
-                            className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition"
-                        >
-                            {imageModels.map(model => (
-                                <option key={model.id} value={model.id}>{model.name}</option>
-                            ))}
-                        </select>
-                        <button 
-                            onClick={handleTestApis}
-                            disabled={isTestingApis}
-                            className="mt-2 text-xs text-teal-600 hover:text-teal-800 flex items-center gap-1 disabled:opacity-50"
-                        >
-                            {isTestingApis ? <div className="h-3 w-3 border-2 border-teal-500 border-t-transparent rounded-full animate-spin"></div> : '🔍'}
-                            Kiểm tra kết nối API cho tất cả models
-                        </button>
+                        <h3 className="text-sm font-bold text-gray-700 mb-2">Cấu hình Model AI (Runware)</h3>
+                        
+                        <div className="mb-4 p-4 bg-teal-50 rounded-lg border border-teal-100">
+                            <div className="flex justify-between items-center mb-2">
+                                <label className="text-sm font-medium text-teal-800">Model Tạo Ảnh (Runware/CivitAI)</label>
+                                <button 
+                                    onClick={() => setShowCustomModelInput(!showCustomModelInput)}
+                                    className="text-xs text-teal-600 hover:text-teal-800 underline"
+                                >
+                                    {showCustomModelInput ? 'Ẩn thêm model' : '+ Thêm Model từ CivitAI'}
+                                </button>
+                            </div>
+                            
+                            {showCustomModelInput && (
+                                <div className="mb-3 flex gap-2 animate-fade-in">
+                                    <input 
+                                        type="text" 
+                                        value={customModelId}
+                                        onChange={(e) => setCustomModelId(e.target.value)}
+                                        placeholder="Nhập CivitAI Model ID (VD: civitai:133005@357609)"
+                                        className="flex-1 text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
+                                    />
+                                    <Button size="sm" onClick={handleSaveCustomModel} className="text-xs">
+                                        Lưu & Chọn
+                                    </Button>
+                                </div>
+                            )}
 
+                            <select 
+                                value={selectedImageModel} 
+                                onChange={(e) => setSelectedImageModel(e.target.value)}
+                                className="w-full text-sm p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none bg-white"
+                            >
+                                {imageModels.map(model => (
+                                    <option key={model.id} value={model.id}>
+                                        {model.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] text-teal-600 mt-1">
+                                * Chọn model phù hợp với phong cách ảnh bạn muốn tạo. Model Runware hỗ trợ tạo ảnh cực nhanh.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <Button 
+                                onClick={handleTestApis} 
+                                disabled={isTestingApis}
+                                variant="outline"
+                                className="w-full border-teal-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800"
+                            >
+                                {isTestingApis ? (
+                                    <>
+                                        <div className="h-4 w-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+                                        Đang kiểm tra...
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="mr-2">⚡</span> Kiểm tra kết nối API
+                                    </>
+                                )}
+                            </Button>
+                        </div>
                         {renderApiTestResults()}
                     </div>
                     
@@ -662,19 +756,6 @@ ${failedPrompt}
             <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl p-4 sm:p-8 border border-gray-200">
                 {renderContent()}
             </div>
-        )}
-
-        {step !== 'upload' && (
-          <div className="mt-8">
-            <TaskHistory tasks={tasks} />
-          </div>
-        )}
-
-        {step === 'upload' && (
-          <div className="mt-8">
-            <TaskHistory tasks={tasks} />
-            <CommunityHistory tasks={allTasks} />
-          </div>
         )}
       </main>
 
