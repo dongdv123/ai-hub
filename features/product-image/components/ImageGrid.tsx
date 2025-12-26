@@ -6,16 +6,21 @@ import DownloadIcon from './icons/DownloadIcon';
 
 interface ImageGridProps {
   images: string[];
+  onImageClick?: (index: number) => void;
 }
 
-const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
+const ImageGrid: React.FC<ImageGridProps> = ({ images, onImageClick }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const openModal = (index: number) => {
-    setSelectedImageIndex(index);
-    setModalOpen(true);
+    if (onImageClick) {
+      onImageClick(index);
+    } else {
+      setSelectedImageIndex(index);
+      setModalOpen(true);
+    }
   };
   
   const closeModal = () => {

@@ -1,12 +1,39 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Task } from '../services/taskService';
 import ImageGrid from './ImageGrid';
+import ImageModal from './ImageModal';
 
 interface TaskHistoryProps {
   tasks: Task[];
 }
 
 const TaskHistory: React.FC<TaskHistoryProps> = ({ tasks }) => {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+
+  const allImages = useMemo(() => {
+    return tasks.flatMap(task => task.outputImageUrls);
+  }, [tasks]);
+
+  const getGlobalIndex = (taskIndex: number, imageIndex: number) => {
+    let count = 0;
+    for (let i = 0; i < taskIndex; i++) {
+      count += tasks[i].outputImageUrls.length;
+    }
+    return count + imageIndex;
+  };
+
+  const openModal = (taskIndex: number, imageIndex: number) => {
+    const globalIndex = getGlobalIndex(taskIndex, imageIndex);
+    setSelectedImageIndex(globalIndex);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setSelectedImageIndex(null);
+  };
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleString('vi-VN', {
       year: 'numeric',
@@ -58,10 +85,21 @@ const TaskHistory: React.FC<TaskHistoryProps> = ({ tasks }) => {
                     </div>
                 )}
 
-                <ImageGrid images={task.outputImageUrls} />
+                <ImageGrid 
+                  images={task.outputImageUrls} 
+                  onImageClick={(imgIndex) => openModal(index, imgIndex)}
+                />
             </div>
             ))}
         </div>
+      )}
+
+      {modalOpen && selectedImageIndex !== null && (
+        <ImageModal 
+          images={allImages}
+          initialIndex={selectedImageIndex}
+          onClose={closeModal}
+        />
       )}
     </div>
   );

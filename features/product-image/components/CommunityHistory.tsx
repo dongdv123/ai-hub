@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Task } from '../services/taskService';
 import ImageGrid from './ImageGrid';
 import ChevronLeftIcon from './icons/ChevronLeftIcon';
 import ChevronRightIcon from './icons/ChevronRightIcon';
+import ImageModal from './ImageModal';
 
 interface CommunityHistoryProps {
   tasks: Task[];
@@ -12,14 +13,38 @@ const TASKS_PER_PAGE = 5;
 
 const CommunityHistory: React.FC<CommunityHistoryProps> = ({ tasks }) => {
   const [currentPage, setCurrentPage] = useState(1);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
 
-  const sortedTasks = [...tasks].sort((a, b) => b.timestamp - a.timestamp);
+  const sortedTasks = useMemo(() => [...tasks].sort((a, b) => b.timestamp - a.timestamp), [tasks]);
+  const allImages = useMemo(() => sortedTasks.flatMap(t => t.outputImageUrls), [sortedTasks]);
+
   const totalPages = Math.ceil(sortedTasks.length / TASKS_PER_PAGE);
   
   const startIndex = (currentPage - 1) * TASKS_PER_PAGE;
   const endIndex = startIndex + TASKS_PER_PAGE;
   const currentTasks = sortedTasks.slice(startIndex, endIndex);
   const USER_HASH = 'default_user';
+
+  const getGlobalIndex = (taskIndexInPage: number, imageIndex: number) => {
+    const actualTaskIndex = startIndex + taskIndexInPage;
+    let count = 0;
+    for (let i = 0; i < actualTaskIndex; i++) {
+        count += sortedTasks[i].outputImageUrls.length;
+    }
+    return count + imageIndex;
+  };
+
+  const openModal = (taskIndexInPage: number, imageIndex: number) => {
+      const globalIndex = getGlobalIndex(taskIndexInPage, imageIndex);
+      setSelectedImageIndex(globalIndex);
+      setModalOpen(true);
+  };
+
+  const closeModal = () => {
+      setModalOpen(false);
+      setSelectedImageIndex(null);
+  };
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleString('vi-VN', {
@@ -59,7 +84,10 @@ const CommunityHistory: React.FC<CommunityHistoryProps> = ({ tasks }) => {
                     </div>
 
                     <div className="flex-grow mb-4">
-                        <ImageGrid images={task.outputImageUrls} />
+                        <ImageGrid 
+                            images={task.outputImageUrls} 
+                            onImageClick={(imgIdx) => openModal(index, imgIdx)}
+                        />
                     </div>
 
                     {(task.seoTitle || (task.seoTags && task.seoTags.length > 0)) && (
@@ -105,6 +133,14 @@ const CommunityHistory: React.FC<CommunityHistoryProps> = ({ tasks }) => {
                 </div>
             )}
         </>
+      )}
+
+      {modalOpen && selectedImageIndex !== null && (
+        <ImageModal 
+          images={allImages}
+          initialIndex={selectedImageIndex}
+          onClose={closeModal}
+        />
       )}
     </div>
   );
