@@ -9,6 +9,7 @@ import HeroSection from './components/HeroSection';
 import ImageTab from '../image-generator/ImageTab';
 import ProductAssistantTab from '../product-image/ProductAssistantTab';
 import HistoryTab from '../product-image/HistoryTab';
+import SettingsTab from '../settings/SettingsTab';
 import { Button } from '@/components/ui/button';
 import { AppProvider, useAppContext } from './context/AppContext';
 
@@ -97,54 +98,6 @@ const SidebarNav: React.FC = () => (
                     }`}
                 >
                     Lịch sử tạo
-                </NavLink>
-            </li>
-            <li>
-                <NavLink
-                    to="/ads"
-                    className={({ isActive }) => `w-full text-left block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        isActive
-                            ? 'bg-teal-600 text-white'
-                            : 'text-gray-700 hover:bg-teal-50 hover:text-teal-700'
-                    }`}
-                >
-                    Tối ưu Quảng cáo
-                </NavLink>
-            </li>
-            <li>
-                <NavLink
-                    to="/pricing"
-                    className={({ isActive }) => `w-full text-left block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        isActive
-                            ? 'bg-teal-600 text-white'
-                            : 'text-gray-700 hover:bg-teal-50 hover:text-teal-700'
-                    }`}
-                >
-                    Giá & Biên lợi nhuận
-                </NavLink>
-            </li>
-            <li>
-                <NavLink
-                    to="/inventory"
-                    className={({ isActive }) => `w-full text-left block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        isActive
-                            ? 'bg-teal-600 text-white'
-                            : 'text-gray-700 hover:bg-teal-50 hover:text-teal-700'
-                    }`}
-                >
-                    Tồn kho & Hiển thị
-                </NavLink>
-            </li>
-            <li>
-                <NavLink
-                    to="/reports"
-                    className={({ isActive }) => `w-full text-left block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        isActive
-                            ? 'bg-teal-600 text-white'
-                            : 'text-gray-700 hover:bg-teal-50 hover:text-teal-700'
-                    }`}
-                >
-                    Báo cáo & Cảnh báo
                 </NavLink>
             </li>
             <li>
@@ -365,36 +318,7 @@ const MainContent: React.FC<MainAppProps> = ({ user }) => {
                             <Route path="/image" element={<ImageTab />} />
                             <Route path="/product-assistant" element={<ProductAssistantTab />} />
                             <Route path="/history" element={<HistoryTab />} />
-                            <Route path="/ads" element={
-                                <PlaceholderCard
-                                    title="Tối ưu Quảng cáo"
-                                    desc="Tự động gợi ý ngân sách, creative, và pacing cho quảng cáo. Tính năng sẽ được bật sớm."
-                                />
-                            } />
-                            <Route path="/pricing" element={
-                                <PlaceholderCard
-                                    title="Giá & Biên lợi nhuận"
-                                    desc="Định giá động, theo dõi biên lợi nhuận và cảnh báo giảm giá an toàn. Đang được phát triển."
-                                />
-                            } />
-                            <Route path="/inventory" element={
-                                <PlaceholderCard
-                                    title="Tồn kho & Hiển thị"
-                                    desc="Đồng bộ tồn kho, cảnh báo hết hàng, tự ẩn/hiện listing. Sắp ra mắt."
-                                />
-                            } />
-                            <Route path="/reports" element={
-                                <PlaceholderCard
-                                    title="Báo cáo & Cảnh báo"
-                                    desc="Dashboard hiệu suất, cảnh báo tụt hạng, spike chi phí. Đang phát triển."
-                                />
-                            } />
-                            <Route path="/settings" element={
-                                <PlaceholderCard
-                                    title="Thiết lập"
-                                    desc="Quản lý khóa API, quy tắc tự động hóa, phân quyền. Sắp có."
-                                />
-                            } />
+                            <Route path="/settings" element={<SettingsTab />} />
                         </Routes>
                     </div>
                 </div>

@@ -19,6 +19,7 @@ const CommunityHistory: React.FC<CommunityHistoryProps> = ({ tasks }) => {
   const startIndex = (currentPage - 1) * TASKS_PER_PAGE;
   const endIndex = startIndex + TASKS_PER_PAGE;
   const currentTasks = sortedTasks.slice(startIndex, endIndex);
+  const USER_HASH = 'default_user';
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleString('vi-VN', {
@@ -44,39 +45,38 @@ const CommunityHistory: React.FC<CommunityHistoryProps> = ({ tasks }) => {
         </div>
       ) : (
         <>
-            <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {currentTasks.map((task, index) => (
-                <div key={`${task.timestamp}-${index}`} className="bg-white/70 backdrop-blur-xl rounded-xl shadow-lg p-6 border border-slate-200">
-                    <div className="flex flex-col sm:flex-row justify-between items-start mb-4">
-                    <h3 className="text-xl font-bold text-slate-800 mb-2 sm:mb-0">{task.productName}</h3>
-                    <p className="text-sm text-slate-500 flex-shrink-0">{formatDate(task.timestamp)}</p>
+                <div key={`${task.timestamp}-${index}`} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 border border-slate-200 flex flex-col h-full">
+                    <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-slate-800 line-clamp-1">{task.productName}</h3>
+                            {task.userHash === USER_HASH && (
+                                <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">Của bạn</span>
+                            )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 whitespace-nowrap">{formatDate(task.timestamp)}</p>
+                    </div>
+
+                    <div className="flex-grow mb-4">
+                        <ImageGrid images={task.outputImageUrls} />
                     </div>
 
                     {(task.seoTitle || (task.seoTags && task.seoTags.length > 0)) && (
-                        <div className="mb-4 bg-white/50 p-3 rounded-lg border border-slate-100">
+                        <div className="mt-auto pt-3 border-t border-slate-100">
                             {task.seoTitle && (
-                                <div className="mb-2">
-                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tiêu đề SEO</span>
-                                    <p className="text-sm text-slate-800 mt-1">{task.seoTitle}</p>
-                                </div>
+                                <p className="text-xs text-slate-600 line-clamp-2 italic mb-2">"{task.seoTitle}"</p>
                             )}
-                            
                             {task.seoTags && task.seoTags.length > 0 && (
-                                <div>
-                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1">Tags</span>
-                                    <div className="flex flex-wrap gap-1">
-                                        {task.seoTags.map((tag, i) => (
-                                            <span key={i} className="inline-block px-2 py-1 bg-white border border-slate-200 rounded text-xs text-slate-600">
-                                                {tag}
-                                            </span>
-                                        ))}
-                                    </div>
+                                <div className="flex flex-wrap gap-1">
+                                    {task.seoTags.slice(0, 3).map((tag, i) => (
+                                        <span key={i} className="text-[10px] text-slate-400">#{tag}</span>
+                                    ))}
+                                    {task.seoTags.length > 3 && <span className="text-[10px] text-slate-400">...</span>}
                                 </div>
                             )}
                         </div>
                     )}
-
-                    <ImageGrid images={task.outputImageUrls} />
                 </div>
                 ))}
             </div>
