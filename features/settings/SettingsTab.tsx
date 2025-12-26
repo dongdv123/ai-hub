@@ -22,12 +22,19 @@ const SettingsTab: React.FC = () => {
     const [settings, setSettings] = useState<ApiSettings>({ geminiApiKey: '', runwareApiKey: '' });
     const [isSaved, setIsSaved] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isProduction, setIsProduction] = useState(false);
 
     useEffect(() => {
         setSettings(getApiSettings());
+        setIsProduction(import.meta.env.PROD);
     }, []);
 
     const handleSave = async () => {
+        if (isProduction) {
+            alert("Trên môi trường Production (Vercel), bạn không thể lưu vào file .env.local.\n\nVui lòng cài đặt API Key trong phần Settings > Environment Variables của dự án trên Vercel.");
+            return;
+        }
+
         setIsSaving(true);
         try {
             const response = await fetch('/api/save-env', {
@@ -124,10 +131,12 @@ const SettingsTab: React.FC = () => {
             </div>
 
             <div className="mt-12 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <h3 className="text-blue-800 font-bold text-sm mb-1">Thông tin lưu trữ:</h3>
-                <p className="text-blue-700 text-xs leading-relaxed">
-                    API Key sẽ được lưu vào file <code>.env.local</code> trên máy của bạn. Server sẽ tự động khởi động lại để áp dụng thay đổi.
-                </p>
+                <h3 className="text-blue-800 font-bold text-sm mb-1">Cơ chế hoạt động:</h3>
+                <ul className="list-disc list-inside text-blue-700 text-xs leading-relaxed space-y-1">
+                    <li><strong>Localhost:</strong> Key sẽ được lưu trực tiếp vào file <code>.env.local</code>.</li>
+                    <li><strong>Production (Vercel):</strong> Vì lý do bảo mật, bạn KHÔNG THỂ lưu file trên server. Vui lòng cài đặt Key trong <strong>Project Settings &rarr; Environment Variables</strong> trên Dashboard của Vercel.</li>
+                    <li>Hệ thống <strong>không</strong> lưu Key vào trình duyệt (LocalStorage) theo yêu cầu bảo mật của bạn.</li>
+                </ul>
             </div>
         </div>
     );
