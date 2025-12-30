@@ -280,6 +280,103 @@ Image Quality: Professional studio lighting, photorealistic, sharp, high resolut
 };
 
 
+export const optimizePromptWithGemini = async (
+    currentPrompt: string, 
+    modelId: string = '',
+    angleLabel: string = '',
+    vibe: string = '',
+    optimizationModelId: string = 'gemini-2.0-flash',
+    context: {
+        productName?: string;
+        productDescription?: string;
+        analysis?: string;
+    } = {}
+): Promise<string> => {
+    try {
+        const isFlux = modelId.includes('runware:100') || modelId.includes('runware:101');
+        const isImagen = modelId.startsWith('gemini') || modelId.startsWith('imagen');
+        
+        let modelTarget = "AI Image Generator";
+        if (isFlux) modelTarget = "Flux.1 AI";
+        if (isImagen) modelTarget = "Google Imagen 3 / Gemini Image Generation";
+
+        const optimizationPrompt = `You are an expert AI Prompt Engineer.
+Your task is to rewrite the following image generation prompt to be optimized for ${modelTarget}.
+
+Original Prompt:
+"${currentPrompt}"
+
+Target Camera Angle/Composition: "${angleLabel}"
+Target Style/Vibe: "${vibe}"
+
+### PRODUCT CONTEXT (CRITICAL) ###
+- Product Name: "${context.productName || 'Not specified'}"
+- Product Description: "${context.productDescription || 'Not specified'}"
+- Visual Analysis (from Image): "${context.analysis || 'Not available'}"
+
+### EXTREMELY IMPORTANT: OUTPUT STRUCTURE & RULES ###
+You MUST strictly follow this output structure. Do NOT add any conversational text.
+
+Task: [Action verb] a [style] photograph of [Product Name].
+Input: Use the product details (shape, color, material) from the Product Context and Original Prompt.
+Core Requirement: RECREATE the product in a completely new photograph.
+Angle: [Detailed angle description based on "${angleLabel}"].
+Lighting: [Detailed lighting description based on "${vibe}"].
+Background/Setting: [Detailed setting description based on "${vibe}"].
+Props & Composition: [Suggest 2-3 specific props or composition elements that match the "${vibe}"].
+!!! CRITICALLY IMPORTANT REQUIREMENTS !!!
+1. DO NOT EDIT THE ORIGINAL PHOTO: ABSOLUTELY do not cut, paste, edit, or reuse any part of the input images.
+2. CREATE 100% NEW: The final image must be a completely new creation, looking like a real photoshoot.
+3. MAINTAIN DESIGN INTEGRITY: The product's design (shape, logo, details) must be preserved as described in the Product Context.
+Image Quality: [Quality keywords based on model ${modelTarget}].
+
+### KEY FIXES FOR ACCURACY ###
+1. **PRODUCT IDENTITY:** STRICTLY ADHERE to the "Product Context" provided above. If the analysis says it's a "Wooden Lamp", do NOT generate a "Plastic Toy". Use the specific details from the Visual Analysis (materials, dimensions, shape).
+2. **ANGLE FIDELITY:** If the angle is "${angleLabel}", use strong enforcement keywords.
+   - For "Flat Lay": "Directly from above", "90-degree overhead", "2D plane", "No perspective distortion".
+   - For "Front View": "Eye-level", "Straight-on", "Symmetrical".
+3. **COMPOSITION CONTROL:** Ensure the product is the CENTRAL focus. "Centered composition", "Product is the hero".
+
+### EXAMPLE OUTPUT (For reference only) ###
+Task: Create a professional flat-lay (top-down) photograph of the Dragon Ball resin lamp.
+Input: Use the product details (Piccolo vs Goku figures, orange/red flames, wooden base) from the original image.
+Core Requirement: RECREATE the product in a completely new photograph, strictly adhering to the requested flat-lay style.
+Angle: Strict top-down view (90 degrees overhead). The circular face of the resin disc should appear perfectly round and flat against the surface.
+Lighting: Bright, even, soft studio lighting from above. This should clearly illuminate the entire scene, minimizing shadows.
+Background/Setting: The product is placed centrally on a textured light grey/beige linen fabric surface.
+Props & Composition: Top Left: A plain envelope. Top Right: A brown river stone. Center: The lamp.
+!!! CRITICALLY IMPORTANT REQUIREMENTS !!!
+1. DO NOT EDIT THE ORIGINAL PHOTO: ABSOLUTELY do not cut, paste, edit, or reuse any part of the input images.
+2. CREATE 100% NEW: The final image must be a completely new creation, looking like a real photoshoot.
+3. MAINTAIN DESIGN INTEGRITY: The product's design must be preserved.
+Image Quality: Photorealistic, sharp focus across the entire flat plane, high resolution.
+###########################################
+
+Requirements for Optimization:
+1.  **Analyze the Product Context** to identify the product type (e.g., "Lamp", "Bottle", "T-shirt"). Explicitly name it in the "Task" section.
+2.  **Enhance Detail:** Add specific keywords for lighting, texture, and composition matching the "${vibe}".
+3.  **Angle Optimization:** Ensure the "Angle" section strictly enforces "${angleLabel}" with technical camera terms.
+4.  **Style & Vibe Enforcement:** Ensure the "Lighting", "Background/Setting", and "Props" sections strictly reflect the "${vibe}".
+5.  **Output:** Return ONLY the rewritten prompt string in the structured format above. Do not add explanations or markdown.
+
+Rewritten Prompt:`;
+
+        const response = await ai.models.generateContent({
+            model: optimizationModelId, // Use the user-selected model for optimization
+            contents: { parts: [{ text: optimizationPrompt }] }
+        });
+
+        const newPrompt = response.text?.trim();
+        if (!newPrompt) throw new Error("Empty response from AI");
+        
+        return newPrompt;
+
+    } catch (error) {
+        console.error("Error optimizing prompt:", error);
+        throw error;
+    }
+};
+
 export const generateFinalImages = async (
     images: ImagePayload[], 
     prompts: string[],

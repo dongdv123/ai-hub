@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ProductAnalysis, EtsySeoResult, EditableImagePlan } from '../services/geminiService';
 import Spinner from './Spinner';
 import EtsySeoDisplay from './EtsySeoDisplay';
@@ -35,9 +35,8 @@ const AnalysisEditor: React.FC<AnalysisEditorProps> = ({
     onBack, 
     isGenerating,
     generationStatus,
-    error
+    error,
 }) => {
-
   const handleDimensionChange = (index: number, value: string) => {
     const newDimensions = [...analysis.dimensions];
     newDimensions[index] = { ...newDimensions[index], value };

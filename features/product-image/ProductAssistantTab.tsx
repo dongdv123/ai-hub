@@ -8,7 +8,8 @@ import {
   EditableImagePlan, 
   constructPromptsFromPlan,
   testGeminiModel,
-  testImagenModel
+  testImagenModel,
+  optimizePromptWithGemini
 } from './services/geminiService';
 import { 
   generateImage as generateRunwareImage, 
@@ -36,6 +37,21 @@ import { saveAs } from 'file-saver';
 type Step = 'upload' | 'analyzing' | 'editing' | 'results';
 const USER_HASH = 'default_user'; // For single-user localStorage persistence
 
+const VIBE_OPTIONS = [
+    { value: "Minimalist & Clean", label: "Tối giản & Sạch sẽ (Minimalist & Clean)" },
+    { value: "Warm & Cozy", label: "Ấm áp & Ấm cúng (Warm & Cozy)" },
+    { value: "Luxury & Elegant", label: "Sang trọng & Thanh lịch (Luxury & Elegant)" },
+    { value: "Vintage & Rustic", label: "Cổ điển & Mộc mạc (Vintage & Rustic)" },
+    { value: "Nature & Organic", label: "Thiên nhiên & Hữu cơ (Nature & Organic)" },
+    { value: "Vibrant & Playful", label: "Sôi động & Vui tươi (Vibrant & Playful)" },
+    { value: "Dark & Moody", label: "Tối & Tâm trạng (Dark & Moody)" },
+    { value: "Studio Professional", label: "Studio Chuyên nghiệp (Studio Professional)" },
+    { value: "Industrial", label: "Công nghiệp (Industrial)" },
+    { value: "Bohemian", label: "Boho (Bohemian)" },
+    { value: "Pastel & Soft", label: "Màu Pastel & Nhẹ nhàng (Pastel & Soft)" },
+    { value: "custom", label: "Tự nhập (Custom...)" }
+];
+
 const ProductAssistantTab: React.FC = () => {
   const [step, setStep] = useState<Step>('upload');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -46,6 +62,7 @@ const ProductAssistantTab: React.FC = () => {
   const [productName, setProductName] = useState<string>('');
   const [productDescription, setProductDescription] = useState<string>('');
   const [vibe, setVibe] = useState<string>('');
+  const [isCustomVibe, setIsCustomVibe] = useState<boolean>(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
@@ -63,6 +80,7 @@ const ProductAssistantTab: React.FC = () => {
   const [maskUrls, setMaskUrls] = useState<(string | null)[]>([null, null, null]);
   const [maskingIndex, setMaskingIndex] = useState<number | null>(null);
   const [tempImageBase64, setTempImageBase64] = useState<string | null>(null);
+  const [autoOptimizePrompts, setAutoOptimizePrompts] = useState<boolean>(true);
 
   const models = [
     { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Mới nhất, Siêu nhanh)' },
@@ -76,11 +94,12 @@ const ProductAssistantTab: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<string>(models[0].id);
 
   const defaultImageModels = [
+    { id: 'prunaai:1@1', name: 'Pruna AI (Tối ưu)' },
     { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Pro Image (Mới nhất, Đẹp nhất)' },
     { id: 'gemini-2.5-flash-image', name: 'Imagen 3 (Google - Nhanh)' },
     { id: 'runware:100@1', name: 'Flux.1 Schnell (Runware - Siêu nhanh)' },
     { id: 'runware:101@1', name: 'Flux.1 Dev (Runware - Chi tiết)' },
-    { id: 'prunaai:1@1', name: 'Pruna AI (Tối ưu)' },
+    
   ];
   const [imageModels, setImageModels] = useState(defaultImageModels);
   const [selectedImageModel, setSelectedImageModel] = useState<string>(defaultImageModels[0].id);
@@ -297,7 +316,28 @@ const ProductAssistantTab: React.FC = () => {
       const { analysis, seo } = await analyzeProductAndGenerateSeo(imagePayloads, productName, productDescription, selectedModel);
       
       const selectedPlans = allImagePlans.filter((_, index) => selectedPlanIndexes.includes(index));
-      const initialPrompts = constructPromptsFromPlan(selectedPlans, analysis, productName, productDescription, vibe);
+      let initialPrompts = constructPromptsFromPlan(selectedPlans, analysis, productName, productDescription, vibe);
+
+      if (autoOptimizePrompts) {
+        // Automatically optimize prompts if checkbox is selected
+        initialPrompts = await Promise.all(
+            initialPrompts.map(async (prompt, index) => {
+                try {
+                    // Pass the label of the corresponding plan (e.g., "Top-Down Flat Lay")
+                    const angleLabel = selectedPlans[index]?.label || '';
+                    const context = {
+                        productName,
+                        productDescription,
+                        analysis: JSON.stringify(analysis)
+                    };
+                    return await optimizePromptWithGemini(prompt, selectedImageModel, angleLabel, vibe, selectedModel, context);
+                } catch (err) {
+                    console.error("Auto-optimization failed for prompt, using default:", err);
+                    return prompt;
+                }
+            })
+        );
+      }
 
       setAnalysisData(analysis);
       setEtsySeoData(seo);
@@ -310,7 +350,7 @@ const ProductAssistantTab: React.FC = () => {
       setError(err instanceof Error ? err.message : "Đã xảy ra lỗi không xác định trong quá trình phân tích.");
       setStep('upload');
     }
-  }, [selectedFiles, productName, productDescription, vibe, allImagePlans, selectedPlanIndexes, maskUrls, selectedModel]);
+  }, [selectedFiles, productName, productDescription, vibe, allImagePlans, selectedPlanIndexes, maskUrls, selectedModel, autoOptimizePrompts, selectedImageModel]);
   
   const handlePlanSelectionChange = (index: number) => {
     const newSelection = [...selectedPlanIndexes];
@@ -360,7 +400,10 @@ const ProductAssistantTab: React.FC = () => {
         );
         
         const selectedPlans = allImagePlans.filter((_, index) => selectedPlanIndexes.includes(index));
-        const prompts = constructPromptsFromPlan(selectedPlans, analysisData!, productName, productDescription, vibe);
+        // Use the current prompts from state (which might be optimized or edited by user)
+        // const prompts = constructPromptsFromPlan(selectedPlans, analysisData!, productName, productDescription, vibe);
+        // We use the prompts state variable directly.
+        
         let images: string[] = [];
 
         if (selectedImageModel.startsWith('gemini') || selectedImageModel.startsWith('imagen')) {
@@ -504,8 +547,14 @@ ${failedPrompt}
         return (
           <div className="flex flex-col items-center justify-center h-64">
             <Spinner />
-            <p className="mt-4 text-lg text-gray-500 animate-pulse">Đang phân tích sản phẩm & tạo SEO...</p>
-            <p className="text-sm text-gray-500">Xác định hình dạng, vật liệu và tạo tiêu đề & thẻ tối ưu hóa.</p>
+            <p className="mt-4 text-lg text-gray-500 animate-pulse">
+              {autoOptimizePrompts ? "Đang phân tích & Tối ưu hóa Prompt..." : "Đang phân tích sản phẩm & tạo SEO..."}
+            </p>
+            <p className="text-sm text-gray-500">
+              {autoOptimizePrompts 
+                ? "Đang sử dụng Gemini để viết lại prompt tốt nhất cho từng góc chụp." 
+                : "Xác định hình dạng, vật liệu và tạo tiêu đề & thẻ tối ưu hóa."}
+            </p>
           </div>
         );
       case 'editing':
@@ -640,18 +689,43 @@ ${failedPrompt}
                         <label htmlFor="product-vibe" className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                             Phong cách / Thẩm mỹ mong muốn 
                             <span className="text-gray-400">(Tùy chọn)</span>
-                             <Tooltip content="Mô tả tâm trạng, phong cách hoặc cảm giác tổng thể bạn muốn trong các bức ảnh cuối cùng. Ví dụ: 'tối giản và sạch sẽ', 'tối và tâm trạng', 'ấm áp và ấm cúng', 'sôi động và vui tươi', 'sang trọng và thanh lịch'.">
+                             <Tooltip content="Mô tả tâm trạng, phong cách hoặc cảm giác tổng thể bạn muốn trong các bức ảnh cuối cùng.">
                                 <QuestionMarkIcon className="h-4 w-4 text-gray-400 cursor-help" />
                             </Tooltip>
                         </label>
-                        <input
-                            id="product-vibe"
-                            type="text"
-                            placeholder="vd: 'Tối giản và sạch sẽ', 'ấm áp và ấm cúng'"
-                            value={vibe}
-                            onChange={(e) => setVibe(e.target.value)}
-                            className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition"
-                        />
+                        <select
+                            id="product-vibe-select"
+                            value={isCustomVibe ? 'custom' : (vibe || '')}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === 'custom') {
+                                    setIsCustomVibe(true);
+                                    // Keep current vibe if it was custom, or clear if switching from preset
+                                    if (!isCustomVibe) setVibe('');
+                                } else {
+                                    setIsCustomVibe(false);
+                                    setVibe(val);
+                                }
+                            }}
+                            className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition mb-2"
+                        >
+                            <option value="">-- Chọn phong cách --</option>
+                            {VIBE_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
+                        
+                        {isCustomVibe && (
+                            <input
+                                id="product-vibe"
+                                type="text"
+                                placeholder="Nhập phong cách mong muốn (vd: Cyberpunk, Retro 90s)..."
+                                value={vibe}
+                                onChange={(e) => setVibe(e.target.value)}
+                                className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition animate-fade-in"
+                                autoFocus
+                            />
+                        )}
                     </div>
                     
                     <div>
@@ -756,7 +830,22 @@ ${failedPrompt}
                     </div>
                     
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-3">Góc chụp ảnh ({selectedPlanIndexes.length}/6)</label>
+                        <div className="flex justify-between items-center mb-3">
+                            <label className="block text-sm font-medium text-gray-700">Góc chụp ảnh ({selectedPlanIndexes.length}/6)</label>
+                            <div className="flex items-center">
+                                <input
+                                    id="auto-optimize-checkbox"
+                                    type="checkbox"
+                                    className="w-4 h-4 text-teal-600 bg-white border-gray-300 rounded focus:ring-teal-500 focus:ring-2 cursor-pointer"
+                                    checked={autoOptimizePrompts}
+                                    onChange={(e) => setAutoOptimizePrompts(e.target.checked)}
+                                />
+                                <label htmlFor="auto-optimize-checkbox" className="ml-2 text-xs font-medium text-blue-700 cursor-pointer select-none flex items-center gap-1">
+                                    <GenerateIcon className="w-3 h-3" />
+                                    <span>Tự động tối ưu góc chụp ảnh</span>
+                                </label>
+                            </div>
+                        </div>
                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {allImagePlans.map((plan, index) => (
                                 <button
