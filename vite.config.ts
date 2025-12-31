@@ -58,6 +58,19 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        proxy: {
+          '/vidtory-api': {
+            target: 'https://oldapi84.vidtory.net',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/vidtory-api/, ''),
+            configure: (proxy, _options) => {
+              proxy.on('proxyReq', (proxyReq, _req, _res) => {
+                proxyReq.setHeader('Origin', 'https://oldapi84.vidtory.net');
+                proxyReq.setHeader('Referer', 'https://oldapi84.vidtory.net/');
+              });
+            },
+          }
+        }
       },
       plugins: [react(), envHandler()],
       define: {

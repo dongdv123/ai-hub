@@ -261,12 +261,12 @@ Style: Minimalist product design drawing.`;
             ? analysis.materials.map(m => m.description).join(', ') 
             : 'not specified';
             
-        return `Task: Create a professional marketing photo for a product named "${productName}", which is a "${productDescription}".
-Input: Use the provided original image(s) to clearly understand the product's design, colors, and details.
-Core Requirement: RECREATE the product in a completely new photograph and a new setting.
-Angle: ${angle}.
-Background/Setting: ${finalSettingDescription}
-Additional Product Info:
+        return `Task: Create a professional ${angle} photograph of a product named "${productName}", which is a "${productDescription}".
+        Input: Use the provided original image(s) to clearly understand the product's design, colors, and details.
+        Core Requirement: RECREATE the product in a completely new photograph and a new setting.
+        Angle: ${angle}.
+        Background/Setting: ${finalSettingDescription}
+        Additional Product Info:
 - Basic Shape: "${analysis?.sketch || 'unknown'}".
 - Key Materials: ${materialsText}.
 !!! CRITICALLY IMPORTANT REQUIREMENTS !!!
@@ -317,7 +317,7 @@ Target Style/Vibe: "${vibe}"
 ### EXTREMELY IMPORTANT: OUTPUT STRUCTURE & RULES ###
 You MUST strictly follow this output structure. Do NOT add any conversational text.
 
-Task: [Action verb] a [style] photograph of [Product Name].
+Task: [Action verb] a [Detailed angle description] photograph of [Product Name].
 Input: Use the product details (shape, color, material) from the Product Context and Original Prompt.
 Core Requirement: RECREATE the product in a completely new photograph.
 Angle: [Detailed angle description based on "${angleLabel}"].

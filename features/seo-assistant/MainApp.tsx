@@ -10,6 +10,7 @@ import ImageTab from '../image-generator/ImageTab';
 import ProductAssistantTab from '../product-image/ProductAssistantTab';
 import HistoryTab from '../product-image/HistoryTab';
 import SettingsTab from '../settings/SettingsTab';
+import Veo3ChinaTab from '../vidtory-video/Veo3ChinaTab';
 import { Button } from '@/components/ui/button';
 import { AppProvider, useAppContext } from './context/AppContext';
 
@@ -98,6 +99,18 @@ const SidebarNav: React.FC = () => (
                     }`}
                 >
                     Lịch sử tạo
+                </NavLink>
+            </li>
+            <li>
+                <NavLink
+                    to="/veo3-china"
+                    className={({ isActive }) => `w-full text-left block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                            ? 'bg-teal-600 text-white'
+                            : 'text-gray-700 hover:bg-teal-50 hover:text-teal-700'
+                    }`}
+                >
+                    Veo3 China
                 </NavLink>
             </li>
             <li>
@@ -318,6 +331,7 @@ const MainContent: React.FC<MainAppProps> = ({ user }) => {
                             <Route path="/image" element={<ImageTab />} />
                             <Route path="/product-assistant" element={<ProductAssistantTab />} />
                             <Route path="/history" element={<HistoryTab />} />
+                            <Route path="/veo3-china" element={<Veo3ChinaTab />} />
                             <Route path="/settings" element={<SettingsTab />} />
                         </Routes>
                     </div>

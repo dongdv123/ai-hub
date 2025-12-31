@@ -94,11 +94,9 @@ const ProductAssistantTab: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<string>(models[0].id);
 
   const defaultImageModels = [
-    { id: 'prunaai:1@1', name: 'Pruna AI (Tối ưu)' },
+    { id: 'prunaai:2@1', name: 'Pruna AI (Tối ưu)' },
     { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Pro Image (Mới nhất, Đẹp nhất)' },
     { id: 'gemini-2.5-flash-image', name: 'Imagen 3 (Google - Nhanh)' },
-    { id: 'runware:100@1', name: 'Flux.1 Schnell (Runware - Siêu nhanh)' },
-    { id: 'runware:101@1', name: 'Flux.1 Dev (Runware - Chi tiết)' },
     
   ];
   const [imageModels, setImageModels] = useState(defaultImageModels);
