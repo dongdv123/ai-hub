@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import TaskHistory from './components/TaskHistory';
-import CommunityHistory from './components/CommunityHistory';
-import { Task, getUserTasks, getTasks } from './services/taskService';
+import { Task, getUserTasks } from './services/taskService';
 
 const USER_HASH = 'default_user';
 
 const HistoryTab: React.FC = () => {
     const [tasks, setTasks] = useState<Task[]>([]);
-    const [allTasks, setAllTasks] = useState<Task[]>([]);
 
     useEffect(() => {
         setTasks(getUserTasks(USER_HASH));
-        setAllTasks(getTasks());
     }, []);
 
     return (
@@ -26,10 +23,6 @@ const HistoryTab: React.FC = () => {
               </div>
             
             <TaskHistory tasks={tasks} />
-            
-            <div className="mt-12 pt-8 border-t border-gray-200">
-                <CommunityHistory tasks={allTasks} />
-            </div>
         </div>
     );
 };

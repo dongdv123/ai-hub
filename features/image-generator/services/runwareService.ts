@@ -3,6 +3,7 @@ export interface RunwareImageResponse {
     seed: number;
     NSFWContent: boolean;
     cost?: number;
+    taskUUID: string;
 }
 
 interface RunwareRequest {
@@ -10,6 +11,7 @@ interface RunwareRequest {
     taskUUID: string;
     model: string;
     positivePrompt: string;
+    negativePrompt?: string;
     width: number;
     height: number;
     numberResults: number;
@@ -85,10 +87,11 @@ export const generateImage = async (
     // prunaai:2@1 is for Image-to-Image (Edit)
     // prunaai:1@1 is for Text-to-Image
     if (model.includes("prunaai")) {
-        if (!seedImage && model === "prunaai:2@1") {
-            console.log("Switching to prunaai:1@1 for text-to-image generation");
-            model = "prunaai:1@1";
-        } else if (seedImage && model === "prunaai:1@1") {
+        // if (!seedImage && model === "prunaai:2@1") {
+        //     console.log("Switching to prunaai:1@1 for text-to-image generation");
+        //     model = "prunaai:1@1";
+        // } else 
+        if (seedImage && model === "prunaai:2@1") {
             console.log("Switching to prunaai:2@1 for image-to-image/editing");
             model = "prunaai:2@1";
         }
@@ -111,10 +114,20 @@ export const generateImage = async (
         return str;
     };
 
+    // Parse Negative Prompt if present (Format: "Positive prompt... ###NEGATIVE### Negative prompt...")
+    let finalPositivePrompt = prompt;
+    let finalNegativePrompt = "";
+
+    if (prompt.includes("###NEGATIVE###")) {
+        const parts = prompt.split("###NEGATIVE###");
+        finalPositivePrompt = parts[0].trim();
+        finalNegativePrompt = parts[1].trim();
+    }
+
     // Enhance prompt with style
     const fullPrompt = style && style !== 'None' 
-        ? `${prompt}, ${style} style, high quality, detailed` 
-        : `${prompt}, high quality, detailed`;
+        ? `${finalPositivePrompt}, ${style} style, high quality, detailed` 
+        : `${finalPositivePrompt}, high quality, detailed`;
 
     // Determine effective parameters based on task
     let effectiveModel = model;
@@ -128,7 +141,8 @@ export const generateImage = async (
         
         // Prunaai does not support strength parameter in the standard way
         if (effectiveModel && effectiveModel.includes("prunaai")) {
-            effectiveStrength = undefined;
+            // Ensure strength is applied for batch generation too
+            effectiveStrength = 0.85;
         }
     }
 
@@ -137,6 +151,7 @@ export const generateImage = async (
         taskUUID: crypto.randomUUID(),
         model: effectiveModel,
         positivePrompt: fullPrompt,
+        ...(finalNegativePrompt && { negativePrompt: finalNegativePrompt }),
         width: width,
         height: height,
         numberResults: 1, // Each task generates 1 image for maximum parallelism
@@ -213,9 +228,10 @@ export const generateBatchImages = async (
     let model = modelId || modelFromEnv || "runware:100@1";
 
     if (model.includes("prunaai")) {
-        if (!seedImage && model === "prunaai:2@1") {
-            model = "prunaai:1@1";
-        } else if (seedImage && model === "prunaai:1@1") {
+        // if (!seedImage && model === "prunaai:2@1") {
+        //     model = "prunaai:1@1";
+        // } else 
+        if (seedImage && model === "prunaai:2@1") {
             model = "prunaai:2@1";
         }
     }
@@ -242,20 +258,32 @@ export const generateBatchImages = async (
     if (seedImage) {
         effectiveStrength = maskImage ? 1.0 : 0.75;
         if (effectiveModel && effectiveModel.includes("prunaai")) {
-            effectiveStrength = undefined;
+            // Ensure strength is applied for batch generation too
+            effectiveStrength = 0.85;
         }
     }
 
     const tasks = prompts.map(prompt => {
+        // Parse Negative Prompt if present
+        let finalPositivePrompt = prompt;
+        let finalNegativePrompt = "";
+
+        if (prompt.includes("###NEGATIVE###")) {
+            const parts = prompt.split("###NEGATIVE###");
+            finalPositivePrompt = parts[0].trim();
+            finalNegativePrompt = parts[1].trim();
+        }
+
         const fullPrompt = style && style !== 'None' 
-            ? `${prompt}, ${style} style, high quality, detailed` 
-            : `${prompt}, high quality, detailed`;
+            ? `${finalPositivePrompt}, ${style} style, high quality, detailed` 
+            : `${finalPositivePrompt}, high quality, detailed`;
 
         return {
             taskType: taskType,
             taskUUID: crypto.randomUUID(),
             model: effectiveModel,
             positivePrompt: fullPrompt,
+            ...(finalNegativePrompt && { negativePrompt: finalNegativePrompt }),
             width: width,
             height: height,
             numberResults: 1,
@@ -286,20 +314,38 @@ export const generateBatchImages = async (
 
         const data = await response.json();
         
-        if (data.data && Array.isArray(data.data)) {
-            const results = data.data.filter(item => item.imageURL);
-            if (results.length < prompts.length) {
-                console.warn(`Runware only generated ${results.length}/${prompts.length} images. Some tasks might have failed.`);
-            }
-            return results;
-        }
-        
         if (data.errors) {
-            const errorMsg = data.errors.map(e => e.message).join(", ");
+            const errorMsg = data.errors.map((e: any) => e.message).join(", ");
             throw new Error(`Runware API Errors: ${errorMsg}`);
         }
 
-        throw new Error("Không nhận được dữ liệu hình ảnh từ Runware.");
+        let rawResults: RunwareImageResponse[] = [];
+        if (data.data && Array.isArray(data.data)) {
+            rawResults = data.data;
+        } else if (Array.isArray(data)) {
+            rawResults = data as RunwareImageResponse[];
+        } else {
+             throw new Error("Không nhận được dữ liệu hình ảnh từ Runware.");
+        }
+
+        // Sort results to match the order of tasks using taskUUID
+        // This ensures that the generated images correspond correctly to the input prompts
+        const resultMap = new Map(rawResults.map(item => [item.taskUUID, item]));
+        
+        return tasks.map(task => {
+            const result = resultMap.get(task.taskUUID);
+            if (!result) {
+                console.warn(`Result not found for task ${task.taskUUID}`);
+                return {
+                    imageURL: "", // Indicate failure for this specific image
+                    seed: 0,
+                    NSFWContent: false,
+                    taskUUID: task.taskUUID,
+                    cost: 0
+                } as RunwareImageResponse;
+            }
+            return result;
+        });
 
     } catch (error) {
         console.error("Runware API Batch Error:", error);

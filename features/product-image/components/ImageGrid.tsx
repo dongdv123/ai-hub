@@ -6,10 +6,11 @@ import DownloadIcon from './icons/DownloadIcon';
 
 interface ImageGridProps {
   images: string[];
+  labels?: string[];
   onImageClick?: (index: number) => void;
 }
 
-const ImageGrid: React.FC<ImageGridProps> = ({ images, onImageClick }) => {
+const ImageGrid: React.FC<ImageGridProps> = ({ images, labels, onImageClick }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -95,7 +96,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, onImageClick }) => {
               </div>
 
               <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs font-bold px-2 py-1 rounded pointer-events-none z-10">
-                Góc {index + 1}
+                {labels && labels[index] ? labels[index] : `Góc ${index + 1}`}
               </div>
               
               <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">

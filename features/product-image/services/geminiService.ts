@@ -215,7 +215,7 @@ export const createImageGenerationPlan = (): EditableImagePlan[] => {
     { label: "Side Profile", description: "Shot on a reflective surface like dark marble or polished concrete. A dramatic, single light source from the side highlights the product's contours and texture.", isSketch: false },
     { label: "45-Degree View", description: "An authentic lifestyle scene, e.g., on a rustic wooden desk with elegant accessories (a plant, notebook) to give a sense of the product in a real-world context.", isSketch: false },
     { label: "Top-Down Flat Lay", description: "Arranged on a clean, modern surface with textures that complement the product (e.g., linen, matte paper). Props are minimal and related to the product's function.", isSketch: false },
-    { label: "In-Context Close-up", description: "A detailed macro shot focusing on a specific feature (e.g., a logo, texture, button). The background is softly blurred (bokeh) to draw all attention to the detail.", isSketch: false },
+    { label: "In-Context Close-up", description: "A detailed extreme macro shot zooming in on a specific feature (e.g., texture, logo). The background remains visible and recognizable (not heavily blurred) to provide context.", isSketch: false },
     { label: "Creative Composition", description: "An artistic, abstract shot. The product might be interacting with dynamic elements like water splashes, floating fabric, or colored smoke for a high-fashion feel.", isSketch: false },
   ];
 };
@@ -243,7 +243,7 @@ Style: Minimalist product design drawing.`;
             "Side Profile": "side profile view",
             "45-Degree View": "45-degree perspective view",
             "Top-Down Flat Lay": "top-down flat-lay view",
-            "In-Context Close-up": "detailed macro close-up view",
+            "In-Context Close-up": "extreme close-up shot (subject fills frame or partial view) with visible background",
             "Creative Composition": "artistic, abstract composition view",
         };
         const angle = angleMap[plan.label] || 'undetermined angle';
@@ -261,9 +261,18 @@ Style: Minimalist product design drawing.`;
             ? analysis.materials.map(m => m.description).join(', ') 
             : 'not specified';
             
-        return `Task: Create a professional ${angle} photograph of a product named "${productName}", which is a "${productDescription}".
+        const isCloseUp = plan.label === "In-Context Close-up";
+        const taskDescription = isCloseUp
+            ? `Create an extreme close-up macro photograph of a DETAIL of the product named "${productName}"`
+            : `Create a professional ${angle} photograph of a product named "${productName}"`;
+
+        const coreRequirement = isCloseUp
+            ? `Focus intensely on a specific texture, material, or feature. Do NOT show the entire product. The view must be a partial crop.`
+            : `RECREATE the product in a completely new photograph and a new setting.`;
+
+        return `Task: ${taskDescription}, which is a "${productDescription}".
         Input: Use the provided original image(s) to clearly understand the product's design, colors, and details.
-        Core Requirement: RECREATE the product in a completely new photograph and a new setting.
+        Core Requirement: ${coreRequirement}
         Angle: ${angle}.
         Background/Setting: ${finalSettingDescription}
         Additional Product Info:
@@ -280,6 +289,23 @@ Image Quality: Professional studio lighting, photorealistic, sharp, high resolut
 };
 
 
+export const getVibeKeywords = (vibe: string): string => {
+    const vibeMap: Record<string, string> = {
+        "Minimalist & Clean": "(minimalist style:1.5), (clean white background:1.4), (soft diffused lighting:1.4), (high key:1.3)",
+        "Warm & Cozy": "(warm lighting:1.5), (golden hour:1.4), (cozy atmosphere:1.4), (soft shadows:1.3), (wood textures:1.3)",
+        "Luxury & Elegant": "(luxury aesthetic:1.5), (dramatic lighting:1.4), (high contrast:1.3), (elegant props:1.3), (premium feel:1.4)",
+        "Vintage & Rustic": "(vintage style:1.5), (rustic textures:1.4), (warm tones:1.3), (nostalgic feel:1.3), (aged wood:1.2)",
+        "Nature & Organic": "(natural lighting:1.5), (organic textures:1.4), (botanical elements:1.3), (fresh and airy:1.3), (sunlight:1.4)",
+        "Vibrant & Playful": "(vibrant colors:1.5), (playful composition:1.4), (bright lighting:1.4), (color blocking:1.3), (energetic mood:1.3)",
+        "Dark & Moody": "(dark moody lighting:1.5), (chiaroscuro:1.4), (dramatic shadows:1.4), (low key:1.3), (cinematic feel:1.3)",
+        "Studio Professional": "(professional studio lighting:1.6), (perfectly lit:1.5), (neutral background:1.4), (commercial photography:1.4), (sharp focus:1.4)",
+        "Industrial": "(industrial style:1.5), (concrete textures:1.4), (cool tones:1.3), (harsh lighting:1.3), (metallic elements:1.3)",
+        "Bohemian": "(boho style:1.5), (warm earth tones:1.4), (natural fabrics:1.3), (relaxed atmosphere:1.3), (eclectic props:1.3)",
+        "Pastel & Soft": "(pastel color palette:1.5), (soft dreamlike lighting:1.4), (gentle tones:1.3), (airy feel:1.3), (sweet aesthetic:1.2)"
+    };
+    return vibeMap[vibe] || "(bright natural lighting:1.4), (soft daylight:1.3), (true to life colors:1.4), (neutral aesthetic:1.2)";
+};
+
 export const optimizePromptWithGemini = async (
     currentPrompt: string, 
     modelId: string = '',
@@ -295,71 +321,179 @@ export const optimizePromptWithGemini = async (
     try {
         const isFlux = modelId.includes('runware:100') || modelId.includes('runware:101');
         const isImagen = modelId.startsWith('gemini') || modelId.startsWith('imagen');
+        const isPruna = modelId.includes('pruna');
         
         let modelTarget = "AI Image Generator";
         if (isFlux) modelTarget = "Flux.1 AI";
         if (isImagen) modelTarget = "Google Imagen 3 / Gemini Image Generation";
 
-        const optimizationPrompt = `You are an expert AI Prompt Engineer.
-Your task is to rewrite the following image generation prompt to be optimized for ${modelTarget}.
+        let optimizationPrompt = "";
 
-Original Prompt:
-"${currentPrompt}"
+        if (isPruna) {
+            // PRUNA / RUNWARE OPTIMIZATION (Pure Natural Language Description)
+            
+            // Dynamic Vibe Logic: Feed keywords as context only
+            const fixedVibeKeywords = getVibeKeywords(vibe);
+            
+            // Angle Logic: Convert technical angles into descriptive instructions
+            const angleInstructionsMap: Record<string, string> = {
+                "Front View": "Place the camera directly in front of the product at eye level. The product should look perfectly symmetrical and straight-on. Do not angle the camera down or from the side.",
+                "Top-Down Flat Lay": `
+                    THEORY: Knolling / Flat Lay Photography.
+                    CRITICAL POSITIONING: The product is physically LYING FLAT on its back or side on the surface. Gravity pulls it down. It is NOT standing upright.
+                    CAMERA ANGLE: The camera looks straight down from 90 degrees above (Bird's Eye View).
+                    COMPOSITION: The product looks like a 2D graphic or illustration on a canvas. No vertical perspective.
+                    BACKGROUND: The surface (table/floor) fills the entire background.`,
+                "45-Degree View": `
+                    THEORY: Three-Quarter Perspective. 
+                    CHARACTERISTICS: The camera is positioned at a 45-degree angle relative to the product. It captures both the front face and the side face equally.
+                    VISUAL GOAL: To show the product's 3D volume, depth, and dimension in a natural way that mimics human vision.`,
+                "Side Profile": `
+                    THEORY: 90-Degree Lateral Profile. 
+                    CHARACTERISTICS: The camera is at a strict 90-degree angle to the side. The front face of the product is completely hidden. 
+                    VISUAL GOAL: To emphasize the silhouette. If the object is thin (like a phone), show the thin edge. If it's a lamp, show the side contour.`,
+                "In-Context Close-up": `
+                    THEORY: Macro / Detail Shot with Bokeh.
+                    CRITICAL COMPOSITION: CROP THE IMAGE. Do NOT show the entire product. We only want to see a SECTION of the product (approx 30-50% of the object).
+                    FOCUS: Razor-sharp focus on the material texture (wood grain, fabric weave, resin bubbles, metal shine).
+                    BACKGROUND: The background must be visible but heavily blurred (Bokeh) to show the [Vibe] context (e.g., a cozy room, a desk).
+                    GOAL: "I can feel the texture just by looking at it."`,
+                "Creative Composition": "Use a creative, artistic camera angle. You can tilt the camera (Dutch angle) or use dramatic lighting to make the product look dynamic and exciting."
+            };
+            const angleInstruction = angleInstructionsMap[angleLabel] || `Ensure the camera captures a ${angleLabel}.`;
 
-Target Camera Angle/Composition: "${angleLabel}"
-Target Style/Vibe: "${vibe}"
+            // Negative Prompt Logic
+            const negativePromptMap: Record<string, string> = {
+                "Front View": "side view, angled view, profile, 3/4 view",
+                "Top-Down Flat Lay": "perspective view, angled view, side view, 45 degree, horizon, close up, dark background",
+                "45-Degree View": "front view, top view, flat lay, side profile, straight on, symmetry",
+                "Side Profile": "front view, face on, symmetry, looking at camera, top view, flat lay, angled view",
+                "In-Context Close-up": "full product, whole garment, entire object, zoomed out, wide shot, centered composition",
+                "Creative Composition": "boring, plain, standard product shot, centered, symmetrical"
+            };
+            const vibeNegativeMap: Record<string, string> = {
+                "Minimalist & Clean": "dark, moody, neon, clutter, busy, pattern, chaotic, shadows",
+                "Warm & Cozy": "cold, blue, clinical, harsh lighting, industrial, neon",
+                "Luxury & Elegant": "messy, rustic, cheap, plastic, grunge, dirty",
+                "Vintage & Rustic": "modern, futuristic, neon, shiny, plastic, clean",
+                "Nature & Organic": "industrial, artificial, neon, plastic, studio",
+                "Vibrant & Playful": "dull, dark, moody, desaturated, grey",
+                "Dark & Moody": "bright, sunny, white background, high key, overexposed",
+                "Studio Professional": "messy, outdoor, natural light, uneven lighting",
+                "Industrial": "soft, warm, cozy, nature, organic, vintage",
+                "Bohemian": "modern, minimal, cold, clinical, industrial",
+                "Pastel & Soft": "dark, harsh, high contrast, neon, black"
+            };
+            const vibeNegative = vibeNegativeMap[vibe] || "bad quality";
+            const negativePrompt = `${negativePromptMap[angleLabel] || "bad quality"}, ${vibeNegative}`;
 
-### PRODUCT CONTEXT (CRITICAL) ###
-- Product Name: "${context.productName || 'Not specified'}"
-- Product Description: "${context.productDescription || 'Not specified'}"
-- Visual Analysis (from Image): "${context.analysis || 'Not available'}"
+            optimizationPrompt = `
+            You are a Photography Director explaining a shot to a CGI Artist using Pruna AI (a model that excels at natural language understanding but needs explicit instructions on composition and negative space).
+            Task: Write a vivid, natural language scene description optimized specifically for Pruna AI.
+            
+            CONTEXT - PHOTOGRAPHY THEORY FOR THIS SHOT (${angleLabel}):
+            ${angleInstruction}
+            
+            PRODUCT INFO:
+            - Name: "${context.productName || 'Object'}"
+            - Visuals: "${context.analysis || 'Generic'}"
+            
+            TARGET VIBE/STYLE: "${vibe || 'Neutral/Clean'}"
+            (Incorporate lighting, colors, and background elements that match this vibe perfectly. E.g., "Warm & Cozy" -> golden hour, soft shadows, wood textures; "Minimalist" -> clean white, high key, soft diffused light).
 
-### EXTREMELY IMPORTANT: OUTPUT STRUCTURE & RULES ###
-You MUST strictly follow this output structure. Do NOT add any conversational text.
+            INSTRUCTION:
+            Apply the "Photography Theory" above to describe the scene, INFUSED with the Target Vibe.
+            - Explicitly describe how the product is positioned (standing, lying flat, etc.) based on the angle characteristics.
+            - Describe what is visible and what is HIDDEN (e.g., for Side Profile, hide the front).
+            - Use descriptive adjectives to replace technical tags.
+            - The background and lighting MUST reflect the "${vibe}" style.
+            - IMPORTANT FOR PRUNA AI: 
+                1. Be very specific about "Negative Space" and "Cropping". Pruna tends to center everything, so explicitly say if the subject should be off-center or cropped.
+                2. If the angle is "In-Context Close-up", you MUST explicitly say "Crop the image to show only [Part Name]".
+                3. If the angle is "Top-Down Flat Lay", you MUST explicitly say "The object is lying flat on the table".
+            
+            OUTPUT RULES:
+            1. Start with the subject.
+            2. Describe the camera angle, product position, and composition using the theory provided.
+            3. Describe lighting and atmosphere based on the Target Vibe.
+            4. NO technical tags (e.g., (weight:1.5)).
+            5. Put all "Avoid/No" instructions in the Negative section.
+            
+            OUTPUT FORMAT:
+            [Natural Language Description]
+            ###NEGATIVE### 
+            [List of things to avoid, e.g.: blurry, distorted, low quality, text, watermark, bad anatomy, (plus specific angle mistakes to avoid)]
+            `;
 
-Task: [Action verb] a [Detailed angle description] photograph of [Product Name].
-Input: Use the product details (shape, color, material) from the Product Context and Original Prompt.
-Core Requirement: RECREATE the product in a completely new photograph.
-Angle: [Detailed angle description based on "${angleLabel}"].
-Lighting: [Detailed lighting description based on "${vibe}"].
-Background/Setting: [Detailed setting description based on "${vibe}"].
-Props & Composition: [Suggest 2-3 specific props or composition elements that match the "${vibe}"].
-!!! CRITICALLY IMPORTANT REQUIREMENTS !!!
-1. DO NOT EDIT THE ORIGINAL PHOTO: ABSOLUTELY do not cut, paste, edit, or reuse any part of the input images.
-2. CREATE 100% NEW: The final image must be a completely new creation, looking like a real photoshoot.
-3. MAINTAIN DESIGN INTEGRITY: The product's design (shape, logo, details) must be preserved as described in the Product Context.
-Image Quality: [Quality keywords based on model ${modelTarget}].
-
-### KEY FIXES FOR ACCURACY ###
-1. **PRODUCT IDENTITY:** STRICTLY ADHERE to the "Product Context" provided above. If the analysis says it's a "Wooden Lamp", do NOT generate a "Plastic Toy". Use the specific details from the Visual Analysis (materials, dimensions, shape).
-2. **ANGLE FIDELITY:** If the angle is "${angleLabel}", use strong enforcement keywords.
-   - For "Flat Lay": "Directly from above", "90-degree overhead", "2D plane", "No perspective distortion".
-   - For "Front View": "Eye-level", "Straight-on", "Symmetrical".
-3. **COMPOSITION CONTROL:** Ensure the product is the CENTRAL focus. "Centered composition", "Product is the hero".
-
-### EXAMPLE OUTPUT (For reference only) ###
-Task: Create a professional flat-lay (top-down) photograph of the Dragon Ball resin lamp.
-Input: Use the product details (Piccolo vs Goku figures, orange/red flames, wooden base) from the original image.
-Core Requirement: RECREATE the product in a completely new photograph, strictly adhering to the requested flat-lay style.
-Angle: Strict top-down view (90 degrees overhead). The circular face of the resin disc should appear perfectly round and flat against the surface.
-Lighting: Bright, even, soft studio lighting from above. This should clearly illuminate the entire scene, minimizing shadows.
-Background/Setting: The product is placed centrally on a textured light grey/beige linen fabric surface.
-Props & Composition: Top Left: A plain envelope. Top Right: A brown river stone. Center: The lamp.
-!!! CRITICALLY IMPORTANT REQUIREMENTS !!!
-1. DO NOT EDIT THE ORIGINAL PHOTO: ABSOLUTELY do not cut, paste, edit, or reuse any part of the input images.
-2. CREATE 100% NEW: The final image must be a completely new creation, looking like a real photoshoot.
-3. MAINTAIN DESIGN INTEGRITY: The product's design must be preserved.
-Image Quality: Photorealistic, sharp focus across the entire flat plane, high resolution.
-###########################################
-
-Requirements for Optimization:
-1.  **Analyze the Product Context** to identify the product type (e.g., "Lamp", "Bottle", "T-shirt"). Explicitly name it in the "Task" section.
-2.  **Enhance Detail:** Add specific keywords for lighting, texture, and composition matching the "${vibe}".
-3.  **Angle Optimization:** Ensure the "Angle" section strictly enforces "${angleLabel}" with technical camera terms.
-4.  **Style & Vibe Enforcement:** Ensure the "Lighting", "Background/Setting", and "Props" sections strictly reflect the "${vibe}".
-5.  **Output:** Return ONLY the rewritten prompt string in the structured format above. Do not add explanations or markdown.
-
-Rewritten Prompt:`;
+        } else {
+            // FLUX / IMAGEN OPTIMIZATION (Natural Language)
+            optimizationPrompt = `You are an expert AI Prompt Engineer.
+    Your task is to rewrite the following image generation prompt to be optimized for ${modelTarget}.
+    
+    Original Prompt:
+    "${currentPrompt}"
+    
+    Target Camera Angle/Composition: "${angleLabel}"
+    Target Style/Vibe: "${vibe}"
+    
+    ### PRODUCT CONTEXT (CRITICAL) ###
+    - Product Name: "${context.productName || 'Not specified'}"
+    - Product Description: "${context.productDescription || 'Not specified'}"
+    - Visual Analysis (from Image): "${context.analysis || 'Not available'}"
+    
+    ### EXTREMELY IMPORTANT: OUTPUT STRUCTURE & RULES ###
+    You MUST strictly follow this output structure. Do NOT add any conversational text.
+    
+    Task: [Action verb] a [Detailed angle description] photograph of [Product Name].
+    Input: Use the product details (shape, color, material) from the Product Context and Original Prompt.
+    Core Requirement: RECREATE the product in a completely new photograph.
+    Angle: [Detailed angle description based on "${angleLabel}"].
+    Lighting: [Detailed lighting description based on "${vibe}"].
+    Background/Setting: [Detailed setting description based on "${vibe}"].
+    Props & Composition: [Suggest 2-3 specific props or composition elements that match the "${vibe}"].
+    !!! CRITICALLY IMPORTANT REQUIREMENTS !!!
+    1. DO NOT EDIT THE ORIGINAL PHOTO: ABSOLUTELY do not cut, paste, edit, or reuse any part of the input images.
+    2. CREATE 100% NEW: The final image must be a completely new creation, looking like a real photoshoot.
+    3. MAINTAIN DESIGN INTEGRITY: The product's design (shape, logo, details) must be preserved as described in the Product Context.
+    Image Quality: [Quality keywords based on model ${modelTarget}].
+    
+    ### KEY FIXES FOR ACCURACY ###
+    1. **PRODUCT IDENTITY:** STRICTLY ADHERE to the "Product Context" provided above. If the analysis says it's a "Wooden Lamp", do NOT generate a "Plastic Toy". Use the specific details from the Visual Analysis (materials, dimensions, shape).
+    2. **ANGLE FIDELITY:** If the angle is "${angleLabel}", use strong enforcement keywords.
+       - For "Flat Lay": "Directly from above", "90-degree overhead", "2D plane", "No perspective distortion", "Knolling".
+       - For "Front View": "Eye-level", "Straight-on", "Symmetrical", "No vertical angle".
+       - For "Side Profile": "90-degree side view", "Profile silhouette", "No rotation", "Focus on side details".
+       - For "45-Degree View": "Three-quarter view", "Isometric perspective", "Depth and dimension", "Standard product photography angle".
+       - For "In-Context Close-up": "Extreme close-up", "Subject fills the frame", "Partial view/Crop", "Focus on specific detail", "Background visible (not plain)".
+       - For "Creative Composition": "Dynamic angle", "Dutch angle", "Artistic perspective", "Rule of thirds", "Unconventional framing".
+    3. **COMPOSITION CONTROL:**
+         - General: Ensure the product is the CENTRAL focus (unless Creative Composition).
+         - For "In-Context Close-up": "Fill the frame with detail", "Cut off edges of the product", "Zoomed in", "Do NOT show full product".
+         - For "Creative Composition": "Asymmetrical balance", "Dynamic flow", "Negative space".
+    
+    ### EXAMPLE OUTPUT (For reference only) ###
+    Task: Create a professional flat-lay (top-down) photograph of the Dragon Ball resin lamp.
+    Input: Use the product details (Piccolo vs Goku figures, orange/red flames, wooden base) from the original image.
+    Core Requirement: RECREATE the product in a completely new photograph, strictly adhering to the requested flat-lay style.
+    Angle: Strict top-down view (90 degrees overhead). The circular face of the resin disc should appear perfectly round and flat against the surface.
+    Lighting: Bright, even, soft studio lighting from above. This should clearly illuminate the entire scene, minimizing shadows.
+    Background/Setting: The product is placed centrally on a textured light grey/beige linen fabric surface.
+    Props & Composition: Top Left: A plain envelope. Top Right: A brown river stone. Center: The lamp.
+    !!! CRITICALLY IMPORTANT REQUIREMENTS !!!
+    1. DO NOT EDIT THE ORIGINAL PHOTO: ABSOLUTELY do not cut, paste, edit, or reuse any part of the input images.
+    2. CREATE 100% NEW: The final image must be a completely new creation, looking like a real photoshoot.
+    3. MAINTAIN DESIGN INTEGRITY: The product's design must be preserved.
+    Image Quality: Photorealistic, sharp focus across the entire flat plane, high resolution.
+    ###########################################
+    
+    Requirements for Optimization:
+    1.  **Analyze the Product Context** to identify the product type (e.g., "Lamp", "Bottle", "T-shirt"). Explicitly name it in the "Task" section.
+    2.  **Enhance Detail:** Add specific keywords for lighting, texture, and composition matching the "${vibe}".
+    3.  **Angle Optimization:** Ensure the "Angle" section strictly enforces "${angleLabel}" with technical camera terms.
+    4.  **Style & Vibe Enforcement:** Ensure the "Lighting", "Background/Setting", and "Props" sections strictly reflect the "${vibe}".
+    5.  **Output:** Return ONLY the rewritten prompt string in the structured format above. Do not add explanations or markdown.
+    `;
+        }
 
         const response = await ai.models.generateContent({
             model: optimizationModelId, // Use the user-selected model for optimization

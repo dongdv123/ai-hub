@@ -27,7 +27,7 @@ const ImageTab: React.FC = () => {
     { id: 'runware:100@1', name: 'Flux.1 Schnell (Fast)' },
     { id: 'runware:101@1', name: 'Flux.1 Dev (Quality)' },
     { id: 'runware:103@1', name: 'Flux.1 Pro (Premium)' },
-    { id: 'prunaai:1@1', name: 'Pruna AI (Optimized)' },
+    { id: 'prunaai:2@1', name: 'Pruna AI (Optimized)' },
     { id: 'google:gemini-2.0-flash', name: 'Gemini 2.0 Flash (Bộ não)' },
   ];
   const [models, setModels] = useState(defaultModels);

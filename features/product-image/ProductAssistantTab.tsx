@@ -582,7 +582,10 @@ ${failedPrompt}
                 Chi phí tạo ảnh: <span className="font-mono font-medium text-teal-600">${generationCost.toFixed(5)}</span>
               </p>
             )}
-            <ImageGrid images={generatedImages} />
+            <ImageGrid 
+              images={generatedImages} 
+              labels={imagePlan.map(p => p.label)}
+            />
 
              {etsySeoData && (
                 <div className="mt-12 text-left animate-fade-in">

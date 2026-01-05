@@ -64,6 +64,9 @@ export default defineConfig(({ mode }) => {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/vidtory-api/, ''),
             configure: (proxy, _options) => {
+              proxy.on('error', (err, _req, _res) => {
+                console.error('Proxy error:', err);
+              });
               proxy.on('proxyReq', (proxyReq, _req, _res) => {
                 proxyReq.setHeader('Origin', 'https://oldapi84.vidtory.net');
                 proxyReq.setHeader('Referer', 'https://oldapi84.vidtory.net/');
