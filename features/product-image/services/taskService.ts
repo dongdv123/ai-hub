@@ -74,3 +74,25 @@ export const getUserTasks = (userHash: string): Task[] => {
     .filter(task => task.userHash === userHash)
     .sort((a, b) => b.timestamp - a.timestamp); // Sort descending
 };
+
+/**
+ * Retrieves paged tasks for a specific user, sorted by most recent.
+ * @param {string} userHash The hash of the user.
+ * @param {number} page The page number (1-based).
+ * @param {number} limit The number of items per page.
+ * @returns {{ tasks: Task[], total: number }} An object containing the tasks for the page and total count.
+ */
+export const getPagedUserTasks = (userHash: string, page: number = 1, limit: number = 5): { tasks: Task[], total: number } => {
+  const allTasks = getTasks();
+  const userTasks = allTasks
+    .filter(task => task.userHash === userHash)
+    .sort((a, b) => b.timestamp - a.timestamp); // Sort descending
+
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + limit;
+
+  return {
+    tasks: userTasks.slice(startIndex, endIndex),
+    total: userTasks.length
+  };
+};
