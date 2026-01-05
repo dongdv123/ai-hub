@@ -351,9 +351,9 @@ export const optimizePromptWithGemini = async (
                     CHARACTERISTICS: The camera is positioned at a 45-degree angle relative to the product. It captures both the front face and the side face equally.
                     VISUAL GOAL: To show the product's 3D volume, depth, and dimension in a natural way that mimics human vision.`,
                 "Side Profile": `
-                    THEORY: 90-Degree Lateral Profile. 
-                    CHARACTERISTICS: The camera is at a strict 90-degree angle to the side. The front face of the product is completely hidden. 
-                    VISUAL GOAL: To emphasize the silhouette. If the object is thin (like a phone), show the thin edge. If it's a lamp, show the side contour.`,
+                    THEORY: Orthographic 90-Degree Lateral Profile. 
+                    CHARACTERISTICS: The camera is at a STRICT 90-degree angle to the side. The front face of the product MUST BE COMPLETELY HIDDEN. Zero rotation towards the front.
+                    VISUAL GOAL: A perfect 2D silhouette of the side. If it's a car, I see only two wheels. If it's a shoe, I see the heel and toe in a straight line. No perspective distortion.`,
                 "In-Context Close-up": `
                     THEORY: Macro / Detail Shot with Bokeh.
                     CRITICAL COMPOSITION: CROP THE IMAGE. Do NOT show the entire product. We only want to see a SECTION of the product (approx 30-50% of the object).
@@ -369,7 +369,7 @@ export const optimizePromptWithGemini = async (
                 "Front View": "side view, angled view, profile, 3/4 view",
                 "Top-Down Flat Lay": "perspective view, angled view, side view, 45 degree, horizon, close up, dark background",
                 "45-Degree View": "front view, top view, flat lay, side profile, straight on, symmetry",
-                "Side Profile": "front view, face on, symmetry, looking at camera, top view, flat lay, angled view",
+                "Side Profile": "front view, face on, symmetry, looking at camera, top view, flat lay, angled view, 3/4 view, three quarter view, perspective, diagonal, front face visible",
                 "In-Context Close-up": "full product, whole garment, entire object, zoomed out, wide shot, centered composition",
                 "Creative Composition": "boring, plain, standard product shot, centered, symmetrical"
             };

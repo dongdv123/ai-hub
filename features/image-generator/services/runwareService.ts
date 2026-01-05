@@ -268,7 +268,7 @@ export const generateBatchImages = async (
         // 1. Priority: Explicit Angle (passed from UI)
         if (angle) {
             if (angle === "Front View") return 0.85;
-            if (angle === "Side Profile") return 0.55;
+            if (angle === "Side Profile") return 0.40; // Needs significant rotation from front/3/4 view
             if (angle === "Top-Down Flat Lay") return 0.65;
             if (angle === "In-Context Close-up") return 0.50;
             if (angle === "Creative Composition") return 0.65;
@@ -282,7 +282,7 @@ export const generateBatchImages = async (
         if (p.includes("front view") || p.includes("straight-on")) return 0.85;
         
         // Side Profile: Needs significant rotation, lower strength
-        if (p.includes("side profile") || p.includes("side view") || p.includes("90-degree")) return 0.55;
+        if (p.includes("side profile") || p.includes("side view") || p.includes("90-degree")) return 0.40;
         
         // Top-Down: Needs perspective shift
         if (p.includes("top-down") || p.includes("flat lay") || p.includes("bird's eye")) return 0.65;
