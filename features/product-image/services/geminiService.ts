@@ -255,7 +255,7 @@ Style: Minimalist product design drawing.`;
             ? `${settingDescription}. IMPORTANT: The entire scene must be infused with a specific vibe: "${vibeText}". This is a primary requirement and should dictate the mood, color palette, lighting, and any props.`
             : settingDescription;
 
-        const criticalVibeRequirement = vibeText ? `4.  **VIBE IS PARAMOUNT:** The mood and theme of "${vibeText}" must be unmistakably present in the final image. This is not optional.` : '';
+        const criticalVibeRequirement = vibeText ? `4.  **VIBE IS PARAMOUNT (BUT RESPECT THE ANGLE):** The mood and theme of "${vibeText}" must be unmistakably present, BUT it must fit within the constraints of the requested Camera Angle (e.g., if Close-up, show the vibe in the texture/lighting, not by zooming out).` : '';
 
         const materialsText = Array.isArray(analysis?.materials) 
             ? analysis.materials.map(m => m.description).join(', ') 
@@ -409,8 +409,8 @@ export const optimizePromptWithGemini = async (
             Apply the "Photography Theory" above to describe the scene, INFUSED with the Target Vibe.
             
             !!! CRITICAL CONFLICT RESOLUTION !!!
-            If the "Target Vibe" implies a wide scene (e.g., Nature/Landscape) but the "Photography Theory" asks for a Close-up or Flat Lay, the PHOTOGRAPHY THEORY WINS.
-            - NEVER zoom out to show a landscape if the angle is "Close-up".
+            If the "Target Vibe" implies a wide scene (e.g., Nature/Landscape/Industrial) but the "Photography Theory" asks for a Close-up or Flat Lay, the PHOTOGRAPHY THEORY WINS.
+            - NEVER zoom out to show a landscape/room if the angle is "Close-up".
             - NEVER tilt the camera if the angle is "Flat Lay".
             - Apply the Vibe ONLY to the lighting, colors, textures, and background *within* the requested frame.
 
@@ -422,6 +422,7 @@ export const optimizePromptWithGemini = async (
                 1. Be very specific about "Negative Space" and "Cropping". Pruna tends to center everything, so explicitly say if the subject should be off-center or cropped.
                 2. If the angle is "In-Context Close-up", you MUST explicitly say "Crop the image to show only a small corner or partial section of the product". CHANGE THE SUBJECT of the sentence from "The Product" to "A Macro Detail of [Material/Part]".
                 3. If the angle is "Top-Down Flat Lay", you MUST explicitly say "The object is lying flat on the table".
+                4. **VIBE CONSTRAINT:** If the Vibe suggests a large environment (e.g., "Nature", "Industrial"), do NOT render the whole environment. Show only a tiny slice of it in the background to hint at the vibe.
             
             OUTPUT RULES:
             1. Start with the subject.
@@ -483,6 +484,9 @@ export const optimizePromptWithGemini = async (
          - General: Ensure the product is the CENTRAL focus (unless Creative Composition).
          - For "In-Context Close-up": "Focus on a corner or small section of the product", "Cut off most of the product", "Zoomed in", "Do NOT show full product".
          - For "Creative Composition": "Asymmetrical balance", "Dynamic flow", "Negative space".
+    4. **VIBE VS ANGLE CONFLICT:**
+         - If the Target Vibe implies a wide scene (e.g., "Nature", "Industrial", "Studio"), but the Angle is "In-Context Close-up", the ANGLE WINS.
+         - You MUST maintain the "Extreme Close-up" crop. The Vibe should only appear in the BLURRED background or lighting. Do not zoom out to show the room/landscape.
     
     ### EXAMPLE OUTPUT (For reference only) ###
     Task: Create a professional flat-lay (top-down) photograph of the Dragon Ball resin lamp.
