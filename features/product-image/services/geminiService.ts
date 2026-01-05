@@ -243,7 +243,7 @@ Style: Minimalist product design drawing.`;
             "Side Profile": "side profile view",
             "45-Degree View": "45-degree perspective view",
             "Top-Down Flat Lay": "top-down flat-lay view",
-            "In-Context Close-up": "extreme close-up shot (subject fills frame or partial view) with visible background",
+            "In-Context Close-up": "extreme close-up shot (showing only a corner or partial section) with visible background",
             "Creative Composition": "artistic, abstract composition view",
         };
         const angle = angleMap[plan.label] || 'undetermined angle';
@@ -267,7 +267,7 @@ Style: Minimalist product design drawing.`;
             : `Create a professional ${angle} photograph of a product named "${productName}"`;
 
         const coreRequirement = isCloseUp
-            ? `Focus intensely on a specific texture, material, or feature. Do NOT show the entire product. The view must be a partial crop.`
+            ? `Focus intensely on a specific texture, material, or feature. Do NOT show the entire product. The view must be a tight partial crop, capturing only a corner or a small section of the product alongside the background.`
             : `RECREATE the product in a completely new photograph and a new setting.`;
 
         return `Task: ${taskDescription}, which is a "${productDescription}".
@@ -356,10 +356,11 @@ export const optimizePromptWithGemini = async (
                     VISUAL GOAL: A perfect 2D silhouette of the side. If it's a car, I see only two wheels. If it's a shoe, I see the heel and toe in a straight line. No perspective distortion.`,
                 "In-Context Close-up": `
                     THEORY: Macro / Detail Shot with Bokeh.
-                    CRITICAL COMPOSITION: CROP THE IMAGE. Do NOT show the entire product. We only want to see a SECTION of the product (approx 30-50% of the object).
+                    CRITICAL COMPOSITION: TIGHTLY CROP THE IMAGE. Do NOT show the entire product. We only want to see a small SECTION or CORNER of the product (approx 20-40% of the object).
+                    PLACEMENT: The product should be positioned off-center, with the background occupying a significant portion of the frame to provide context.
                     FOCUS: Razor-sharp focus on the material texture (wood grain, fabric weave, resin bubbles, metal shine).
                     BACKGROUND: The background must be visible but heavily blurred (Bokeh) to show the [Vibe] context (e.g., a cozy room, a desk).
-                    GOAL: "I can feel the texture just by looking at it."`,
+                    GOAL: "I can feel the texture just by looking at it while seeing a glimpse of its environment."`,
                 "Creative Composition": "Use a creative, artistic camera angle. You can tilt the camera (Dutch angle) or use dramatic lighting to make the product look dynamic and exciting."
             };
             const angleInstruction = angleInstructionsMap[angleLabel] || `Ensure the camera captures a ${angleLabel}.`;
@@ -370,7 +371,7 @@ export const optimizePromptWithGemini = async (
                 "Top-Down Flat Lay": "perspective view, angled view, side view, 45 degree, horizon, close up, dark background",
                 "45-Degree View": "front view, top view, flat lay, side profile, straight on, symmetry",
                 "Side Profile": "front view, face on, symmetry, looking at camera, top view, flat lay, angled view, 3/4 view, three quarter view, perspective, diagonal, front face visible",
-                "In-Context Close-up": "full product, whole garment, entire object, zoomed out, wide shot, centered composition",
+                "In-Context Close-up": "full product, whole garment, entire object, complete object, zoomed out, wide shot, centered composition",
                 "Creative Composition": "boring, plain, standard product shot, centered, symmetrical"
             };
             const vibeNegativeMap: Record<string, string> = {
@@ -419,7 +420,7 @@ export const optimizePromptWithGemini = async (
             - The background and lighting MUST reflect the "${vibe}" style.
             - IMPORTANT FOR PRUNA AI: 
                 1. Be very specific about "Negative Space" and "Cropping". Pruna tends to center everything, so explicitly say if the subject should be off-center or cropped.
-                2. If the angle is "In-Context Close-up", you MUST explicitly say "Crop the image to show only [Part Name]". CHANGE THE SUBJECT of the sentence from "The Product" to "A Macro Detail of [Material/Part]".
+                2. If the angle is "In-Context Close-up", you MUST explicitly say "Crop the image to show only a small corner or partial section of the product". CHANGE THE SUBJECT of the sentence from "The Product" to "A Macro Detail of [Material/Part]".
                 3. If the angle is "Top-Down Flat Lay", you MUST explicitly say "The object is lying flat on the table".
             
             OUTPUT RULES:
@@ -476,11 +477,11 @@ export const optimizePromptWithGemini = async (
        - For "Front View": "Eye-level", "Straight-on", "Symmetrical", "No vertical angle".
        - For "Side Profile": "90-degree side view", "Profile silhouette", "No rotation", "Focus on side details".
        - For "45-Degree View": "Three-quarter view", "Isometric perspective", "Depth and dimension", "Standard product photography angle".
-       - For "In-Context Close-up": "Extreme close-up", "Subject fills the frame", "Partial view/Crop", "Focus on specific detail", "Background visible (not plain)".
+       - For "In-Context Close-up": "Extreme close-up", "Partial view/Crop showing only a corner or section", "Focus on specific detail", "Background visible (not plain)".
        - For "Creative Composition": "Dynamic angle", "Dutch angle", "Artistic perspective", "Rule of thirds", "Unconventional framing".
     3. **COMPOSITION CONTROL:**
          - General: Ensure the product is the CENTRAL focus (unless Creative Composition).
-         - For "In-Context Close-up": "Fill the frame with detail", "Cut off edges of the product", "Zoomed in", "Do NOT show full product".
+         - For "In-Context Close-up": "Focus on a corner or small section of the product", "Cut off most of the product", "Zoomed in", "Do NOT show full product".
          - For "Creative Composition": "Asymmetrical balance", "Dynamic flow", "Negative space".
     
     ### EXAMPLE OUTPUT (For reference only) ###
