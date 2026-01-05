@@ -211,7 +211,7 @@ export const generateImage = async (
 };
 
 export const generateBatchImages = async (
-    prompts: string[],
+    prompts: Array<{ prompt: string, angle?: string }>,
     style: string,
     width: number,
     height: number,
@@ -263,13 +263,49 @@ export const generateBatchImages = async (
         }
     }
 
-    const tasks = prompts.map(prompt => {
+    // Helper to adjust strength based on prompt keywords and explicit angle
+    const calculateDynamicStrength = (prompt: string, baseStrength: number, angle?: string): number => {
+        // 1. Priority: Explicit Angle (passed from UI)
+        if (angle) {
+            if (angle === "Front View") return 0.85;
+            if (angle === "Side Profile") return 0.55;
+            if (angle === "Top-Down Flat Lay") return 0.65;
+            if (angle === "In-Context Close-up") return 0.50;
+            if (angle === "Creative Composition") return 0.65;
+            if (angle === "45-Degree View") return 0.75;
+        }
+
+        // 2. Fallback: Keyword Detection in Prompt
+        const p = prompt.toLowerCase();
+        
+        // Front View: High strength to preserve identity perfect
+        if (p.includes("front view") || p.includes("straight-on")) return 0.85;
+        
+        // Side Profile: Needs significant rotation, lower strength
+        if (p.includes("side profile") || p.includes("side view") || p.includes("90-degree")) return 0.55;
+        
+        // Top-Down: Needs perspective shift
+        if (p.includes("top-down") || p.includes("flat lay") || p.includes("bird's eye")) return 0.65;
+        
+        // Close-up: Needs zooming/cropping - LOWEST STRENGTH
+        if (p.includes("close-up") || p.includes("macro") || p.includes("zoom")) return 0.50;
+        
+        // Creative: Needs freedom
+        if (p.includes("creative")) return 0.65;
+        
+        return baseStrength;
+    };
+
+    const tasks = prompts.map(item => {
+        const promptString = typeof item === 'string' ? item : item.prompt;
+        const angleLabel = typeof item === 'string' ? undefined : item.angle;
+
         // Parse Negative Prompt if present
-        let finalPositivePrompt = prompt;
+        let finalPositivePrompt = promptString;
         let finalNegativePrompt = "";
 
-        if (prompt.includes("###NEGATIVE###")) {
-            const parts = prompt.split("###NEGATIVE###");
+        if (promptString.includes("###NEGATIVE###")) {
+            const parts = promptString.split("###NEGATIVE###");
             finalPositivePrompt = parts[0].trim();
             finalNegativePrompt = parts[1].trim();
         }
@@ -277,6 +313,9 @@ export const generateBatchImages = async (
         const fullPrompt = style && style !== 'None' 
             ? `${finalPositivePrompt}, ${style} style, high quality, detailed` 
             : `${finalPositivePrompt}, high quality, detailed`;
+
+        // Calculate dynamic strength for this specific prompt
+        const dynamicStrength = seedImage ? calculateDynamicStrength(promptString, effectiveStrength || 0.75, angleLabel) : undefined;
 
         return {
             taskType: taskType,
@@ -291,7 +330,7 @@ export const generateBatchImages = async (
             outputFormat: "PNG",
             includeCost: true,
             seed: Math.floor(Math.random() * 1000000),
-            ...(seedImage && !model.includes("prunaai") && { seedImage: cleanBase64(seedImage), strength: effectiveStrength }),
+            ...(seedImage && !model.includes("prunaai") && { seedImage: cleanBase64(seedImage), strength: dynamicStrength }),
             ...(seedImage && model.includes("prunaai") && { inputs: { referenceImages: [cleanBase64(seedImage)] } }),
             ...(maskImage && !model.includes("prunaai") && { maskImage: cleanBase64(maskImage) })
         };

@@ -9,7 +9,8 @@ import {
   constructPromptsFromPlan,
   testGeminiModel,
   testImagenModel,
-  optimizePromptWithGemini
+  optimizePromptWithGemini,
+  getVibeKeywords
 } from './services/geminiService';
 import { 
   generateImage as generateRunwareImage, 
@@ -420,9 +421,16 @@ const ProductAssistantTab: React.FC = () => {
           setGenerationStatus(`Đang gửi yêu cầu tạo ĐỒNG THỜI ${prompts.length} ảnh đến server AI...`);
           
           // Use generateBatchImages instead of a for-loop to ensure server-side parallelism
+          
+          // Combine prompts with their angle labels to ensure correct strength calculation
+          const promptObjects = prompts.map((prompt, index) => ({
+              prompt: prompt,
+              angle: selectedPlans[index]?.label || ''
+          }));
+
           const results = await generateBatchImages(
-            prompts,
-            '', // style
+            promptObjects,
+            getVibeKeywords(vibe), // style with keywords
             1024, // width
             1024, // height
             seedImage,

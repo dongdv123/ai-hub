@@ -334,6 +334,8 @@ export const optimizePromptWithGemini = async (
             
             // Dynamic Vibe Logic: Feed keywords as context only
             const fixedVibeKeywords = getVibeKeywords(vibe);
+            // Convert weighted tags to natural language for Pruna (e.g., "(tag:1.5)" -> "tag")
+            const naturalVibeDescription = fixedVibeKeywords.replace(/\(([^:]+):[\d.]+\)/g, "$1").replace(/[()]/g, "");
             
             // Angle Logic: Convert technical angles into descriptive instructions
             const angleInstructionsMap: Record<string, string> = {
@@ -399,21 +401,31 @@ export const optimizePromptWithGemini = async (
             - Visuals: "${context.analysis || 'Generic'}"
             
             TARGET VIBE/STYLE: "${vibe || 'Neutral/Clean'}"
-            (Incorporate lighting, colors, and background elements that match this vibe perfectly. E.g., "Warm & Cozy" -> golden hour, soft shadows, wood textures; "Minimalist" -> clean white, high key, soft diffused light).
+            VISUAL ELEMENTS OF THIS VIBE: "${naturalVibeDescription}"
+            (Incorporate these specific lighting, colors, and background elements into the scene).
 
             INSTRUCTION:
             Apply the "Photography Theory" above to describe the scene, INFUSED with the Target Vibe.
+            
+            !!! CRITICAL CONFLICT RESOLUTION !!!
+            If the "Target Vibe" implies a wide scene (e.g., Nature/Landscape) but the "Photography Theory" asks for a Close-up or Flat Lay, the PHOTOGRAPHY THEORY WINS.
+            - NEVER zoom out to show a landscape if the angle is "Close-up".
+            - NEVER tilt the camera if the angle is "Flat Lay".
+            - Apply the Vibe ONLY to the lighting, colors, textures, and background *within* the requested frame.
+
             - Explicitly describe how the product is positioned (standing, lying flat, etc.) based on the angle characteristics.
             - Describe what is visible and what is HIDDEN (e.g., for Side Profile, hide the front).
             - Use descriptive adjectives to replace technical tags.
             - The background and lighting MUST reflect the "${vibe}" style.
             - IMPORTANT FOR PRUNA AI: 
                 1. Be very specific about "Negative Space" and "Cropping". Pruna tends to center everything, so explicitly say if the subject should be off-center or cropped.
-                2. If the angle is "In-Context Close-up", you MUST explicitly say "Crop the image to show only [Part Name]".
+                2. If the angle is "In-Context Close-up", you MUST explicitly say "Crop the image to show only [Part Name]". CHANGE THE SUBJECT of the sentence from "The Product" to "A Macro Detail of [Material/Part]".
                 3. If the angle is "Top-Down Flat Lay", you MUST explicitly say "The object is lying flat on the table".
             
             OUTPUT RULES:
             1. Start with the subject.
+               - IF "In-Context Close-up": Start with "A macro close-up shot of the [Material/Texture] of..."
+               - OTHERWISE: Start with "A [Angle] photograph of [Product Name]..."
             2. Describe the camera angle, product position, and composition using the theory provided.
             3. Describe lighting and atmosphere based on the Target Vibe.
             4. NO technical tags (e.g., (weight:1.5)).
